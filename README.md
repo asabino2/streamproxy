@@ -21,21 +21,21 @@
 <li>http://&lt;serverip&gt;:&lt;port&gt;/videostream/ffmpeg?url=&lt;livestreamurl&gt;
 <ul>
 <li>The livestream will be routed and transcoded to MPEG-2 TS format from a live stream url of any url that ffmpeg supports.</li>
-<li>Ex: http://localhost:3000//videostream/ffmpeg?url=https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8<br />To display the live stream of Redbull TV in MPEG2 TS format on your iptv app</li>
+<li>Ex: http://localhost:3000/videostream/ffmpeg?url=https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8<br />To display the live stream of Redbull TV in MPEG2 TS format on your iptv app</li>
 </ul>
 <p>&nbsp;</p>
 </li>
 <li>http://&lt;serverip&gt;:&lt;port&gt;/videostream/info?url=&lt;livestreamurl&gt;
 <ul>
 <li>Retrieve livestream information through ffprobe, output will be in json format</li>
-<li>Ex: http://localhost:3000//videostream/info?url=https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8<br />Displays information about the Redbull TV livestream</li>
+<li>Ex: http://localhost:3000/videostream/info?url=https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8<br />Displays information about the Redbull TV livestream</li>
 </ul>
 <p>&nbsp;</p>
 </li>
 <li>http://&lt;serverip&gt;:&lt;port&gt;/videostream/checkstream?url=&lt;livestreamurl&gt;
 <ul>
 <li>checks if a stream is online or offline, the output will be in json format</li>
-<li>Ex: http://localhost:3000//videostream/info?url=https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8<br />returns if the Redbull TV stream is online</li>
+<li>Ex: http://localhost:3000/videostream/info?url=https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8<br />returns if the Redbull TV stream is online</li>
 </ul>
 </li>
 </ul>
