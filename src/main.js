@@ -48,7 +48,7 @@ app.get('/videostream/ffmpeg', (req, res) => {
     url = req.query.url;
     //const stream = spawn('streamlink', url + '  best --stdout 2> /dev/null');
     ///usr/bin/ffmpeg -loglevel fatal -i " . $_GET['url'] . " -vcodec mpeg2video -acodec aac -b 15000k  -strict -2 -mbd rd -copyinkf -flags +ilme+ildct -fflags +genpts -metadata service_provider=" . $_GET['provider'] . " -metadata service_name=" . $_GET['service'] . " -f mpegts -tune zerolatency - 2> /dev/null";
-    const stream = spawn('ffmpeg', ['-loglevel', 'fatal', '-i', url, '-vcodec', 'mpeg2video', '-acodec', 'aac', '-b', '15000k', '-strict', '-2', '-mbd', 'rd', '-copyinkf', '-flags', '+ilme+ildct', '-fflags', '+genpts', '-f', 'mpegts', '-tune', 'zerolatency', '-']);
+    const stream = spawn('ffmpeg', ['-loglevel', 'fatal', '-i', url, '-vcodec', 'mpeg2video', '-acodec', 'aac', '-b', '15000k', '-strict', '-2', '-mbd', 'rd', '-copyinkf', '-flags', '+ilme+ildct', '-fflags', '+genpts', '-metadata', 'service_provider=streamproxy', '-f', 'mpegts', '-tune', 'zerolatency', '-']);
     //const stream = spawn('testenumbershow');
     stream.stdout.pipe(res);
     stream.stderr.pipe(process.stderr);
