@@ -1,0 +1,29 @@
+{
+    "name": "streamproxy",
+    "version": "1.0.0",
+    "description": "Stream Proxy - A proxy for your streams",
+    "keywords": [
+        "streamproxy",
+        "m3u"
+    ],
+    "main": "src/main.js",
+    "scripts": {
+        "compile-win": "pkg -t  node14-win src/main.js -o bin/win-x64/streamproxy.exe",
+        "compile-linux": "pkg -t node14-linux-x64 src/main.js -o bin/linux-x64/streamproxy",
+        "compile-NAS": "pkg -t node14-linux-arm64 src/main.js -o bin/linux-arm64/streamproxy"
+    },
+    "author": "Alexander Sabino <asabino2@gmail.com>",
+    "license": "GNU",
+    "repository": "github:asabino2/streamproxy",
+    "bugs": {
+        "url": "https://github.com/asabino2/streamproxy/issues"
+    },
+    "homepage": "https://github.com/asabino2/streamproxy",
+    "dependencies": {
+        "ascii-art": "^2.8.5",
+        "debug": "^4.1.1",
+        "elliptic": "^6.5.4",
+        "express": "^4.18.1",
+        "request": "^2.88.2"
+    }
+}
