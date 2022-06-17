@@ -56,7 +56,7 @@
 </li>
 </ul>
 <hr />
-<h3>Config.json</h3>
+<h3>streamproxy.config.json</h3>
 <p>you can modify some parameters of the program, changing the config.json file located in the same folder as the executable</p>
 <pre><code>{
  "port": "3000",
