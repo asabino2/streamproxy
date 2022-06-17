@@ -1,6 +1,6 @@
 {
     "name": "streamproxy",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "Stream Proxy - A proxy for your streams",
     "keywords": [
         "streamproxy",
@@ -8,9 +8,10 @@
     ],
     "main": "src/main.js",
     "scripts": {
-        "compile-win": "pkg -t  node14-win src/main.js -o bin/win-x64/streamproxy.exe",
+        "compile-win": "pkg -t  node14-win src/main.js -o bin/win-x64/streamproxy.exe && cp bin/win-x64/streamproxy.exe bin/win-x64/instalations_preset/install_with_streamlink_included/streamproxy.exe ",
         "compile-linux": "pkg -t node14-linux-x64 src/main.js -o bin/linux-x64/streamproxy",
-        "compile-NAS": "pkg -t node14-linux-arm64 src/main.js -o bin/linux-arm64/streamproxy"
+        "compile-NAS": "pkg -t node14-linux-arm64 src/main.js -o bin/linux-arm64/streamproxy",
+        "compile-all": "npm run compile-win && npm run compile-linux && npm run compile-NAS"
     },
     "author": "Alexander Sabino <asabino2@gmail.com>",
     "license": "GNU",

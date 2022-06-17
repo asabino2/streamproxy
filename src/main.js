@@ -225,6 +225,7 @@ function loadconfig() {
         config = JSON.parse(jsonString);
     } catch (err) {
 
+        //console.log("error on loading configfile: " + err)
         config = { port: 3000, stramlinkpath: "", ffmpegpath: "", ffmpeg: { codec: "mpeg2video", format: "mpegts", serviceprovider: "streamproxy" } };
     }
 
