@@ -17,7 +17,6 @@
 <p>&nbsp;</p>
 <p>with it you can watch livestreams from youtube, twitch (and any other that can be accessed through the streamlink app) by other iptv apps, such as SSIPTV, tvheadend, ProgTV, etc..</p>
 <p>To start the server, run from the command prompt<br />streamproxy</p>
-
 <p>In your favorite iptv app, you will put in the url one of the following options</p>
 <ul>
 <li>http://&lt;serverip&gt;:&lt;port&gt;/videostream/streamlink?url=&lt;livestreamurl&gt;
@@ -53,6 +52,11 @@
 </ul>
 </ul>
 <p>&nbsp;</p>
+</li>
+<li>http://&lt;serverip&gt;:&lt;port&gt;/status
+<ul>
+<li>see status of opened process</li>
+</ul>
 </li>
 </ul>
 <hr />
