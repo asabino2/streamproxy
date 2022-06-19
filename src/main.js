@@ -7,6 +7,7 @@ const { spawn } = require('child_process');
 const express = require('express');
 var config = {};
 var processes = [];
+var debug = { PID: 0, url: "", app: "", command: "", statusExec: "", lastEvent: "", exitCode: "", exitSignal: "", message: "" };
 //import { loadconfig, addprocess } from './functions.js'
 
 
@@ -49,27 +50,66 @@ app.get('/videostream/streamlink', (req, res) => {
     stream.stdout.pipe(res);
     stream.stderr.pipe(process.stderr);
     //console.log("ended");
+    var spawncommand = stream.spawnargs;
     stream.on('spawn', () => { // on app initialization
 
-        var spawncommand = stream.spawnargs;
+
         //console.log("to string " + spawncommand.toString());
         spawncommand = spawncommand.toString();
         spawncommand = spawncommand.replace(/,/g, ' ');
         addprocess(url, stream.pid, "streamlink", spawncommand);
         console.log(`running streamlink app (PID ${stream.pid}) [${spawncommand}]`);
+        debug.PID = stream.pid;
+        debug.app = "streamlink";
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "spawn";
+        debug.exitCode = "";
+        debug.exitSignal = "";
+        debug.message = "On Spawn command";
+        debug.statusExec = "Running";
+
     })
     stream.on('close', (code, signal) => { // on app closed
         console.log(`close stop of PID ${stream.pid}, code ${code}, signal ${signal}`);
         removeprocess(stream.pid);
+        debug.PID = stream.pid;
+        debug.app = "streamlink";
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "close";
+        debug.exitCode = code;
+        debug.exitSignal = signal;
+        debug.message = "On close";
+        debug.statusExec = "closed";
+
 
     })
 
     stream.on('exit', (code, signal) => {
         //console.log("exit stop code " + code + " signal " + signal);
+        debug.PID = stream.pid;
+        debug.app = "streamlink";
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "exit";
+        debug.exitCode = code;
+        debug.exitSignal = signal;
+        debug.message = "On exit";
+        debug.statusExec = "closed";
     })
 
     stream.on('error', (err) => { // on error on app
         console.log(`error ocurred: ${err}`);
+        debug.PID = stream.pid;
+        debug.app = "streamlink";
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "error";
+        debug.exitCode = "";
+        debug.exitSignal = "";
+        debug.message = err;
+        debug.statusExec = "closed with error";
         res.status(500).send("<h2>Error on calling streamlink app</h2><br>" + err)
     })
 
@@ -95,26 +135,61 @@ app.get('/videostream/ffmpeg', (req, res) => {
 
     stream.stdout.pipe(res);
     stream.stderr.pipe(process.stderr);
-
+    var spawncommand = stream.spawnargs;
     stream.on('spawn', () => { // on app initialization
 
-        var spawncommand = stream.spawnargs;
+
         spawncommand = spawncommand.toString();
         spawncommand = spawncommand.replace(/,/g, ' ');
         //spawncommand = spawncommand.ReplaceAll(",", " ");
         addprocess(url, stream.pid, "ffmpeg", spawncommand);
         console.log(`running ffmpeg app (PID ${stream.pid}) [${spawncommand}]`);
+        debug.PID = stream.pid;
+        debug.app = "ffmpeg";
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "spawn";
+        debug.exitCode = "";
+        debug.exitSignal = "";
+        debug.message = "On Spawn command";
+        debug.statusExec = "Running";
     })
     stream.on('close', (code, signal) => { // on app closed
         console.log(`close stop of PID ${stream.pid}, code ${code}, signal ${signal}`);
-
+        debug.PID = stream.pid;
+        debug.app = "ffmpeg";
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "close";
+        debug.exitCode = code;
+        debug.exitSignal = signal;
+        debug.message = "On close";
+        debug.statusExec = "closed";
     })
 
     stream.on('exit', (code, signal) => {
         //console.log("exit stop code " + code + " signal " + signal);
+        debug.PID = stream.pid;
+        debug.app = "ffmpeg";
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "exit";
+        debug.exitCode = code;
+        debug.exitSignal = signal;
+        debug.message = "On exit";
+        debug.statusExec = "closed";
     })
 
     stream.on('error', (err) => { // on error on app
+        debug.PID = stream.pid;
+        debug.app = "ffmpeg";
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "error";
+        debug.exitCode = "";
+        debug.exitSignal = "";
+        debug.message = err;
+        debug.statusExec = "closed with error";
         console.log(`error ocurred: ${err}`);
         res.status(500).send("<h2>Error on calling ffmpeg app</h2><br>" + err)
     })
@@ -187,6 +262,9 @@ app.get('/api/checkstream', (req, res) => {
     res.json({ streamurl: url, streamstatus: status, mensagem: erro });
 });
 
+app.get('/debug', (req, res) => {
+    res.json(debug);
+})
 
 /*
 // only a test (will be used in future)
@@ -234,7 +312,7 @@ app.get('/status', (req, res) => {
 // help page, captured from github pages
 app.get('/', async function(req, res) {
     const https = require("https");
-    https.get('https://asabino2.github.io/streamproxy/streamproxy.html', (resp) => {
+    https.get('https://raw.githubusercontent.com/asabino2/streamproxy/master/README.md', (resp) => {
         let data = '';
 
         // A chunk of data has been received.
