@@ -190,7 +190,7 @@ app.get('/api/checkstream', (req, res) => {
 });
 
 
-
+/*
 // only a test (will be used in future)
 app.get('/info', (req, res) => {
     res.json({ teste: "true" });
@@ -204,7 +204,7 @@ app.get('/teste', (req, res) => {
     res.setHeader('content-type', 'application/json');
     res.send(returncommand);
 });
-
+*/
 app.get('/status', (req, res) => {
     var data = "";
     data += '<h1> Status </h1><br>';
