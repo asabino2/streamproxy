@@ -149,9 +149,18 @@ app.get('/api/streaminfo', (req, res) => {
         res.setHeader('content-type', 'application/json');
         res.send(returncommand);
     } catch (e) {
-        status = "offline";
-        erro = e.message;
-        res.json({ error: "true", message: e.message });
+        try {
+            var streamlinkprobe = ffprobeStreamlink(url);
+            //console.log("streamlink info: "+streamlinkprobe)
+            res.setHeader('content-type', 'application/json');
+            res.send(streamlinkprobe);
+        } catch (eStreamlink) {
+            status = "offline";
+            erro = e.message;
+            res.json({ error: "true", message: e.message });
+        }
+
+
     }
 });
 
@@ -166,8 +175,16 @@ app.get('/api/checkstream', (req, res) => {
         retunrcommand = require('child_process').execSync(commandffmpeg);
         status = "online";
     } catch (e) {
-        status = "offline";
-        erro = e.message;
+        var streamlinkcheck = checkStreamlink(url);
+        if (streamlinkcheck.streamstatus == "offline") {
+            status = "offline";
+            erro = e.message;
+        } else {
+            status = streamlinkcheck.streamstatus;
+            erro = "get from streamlink";
+
+        }
+
     }
     res.json({ streamurl: url, streamstatus: status, mensagem: erro });
 });
@@ -181,7 +198,11 @@ app.get('/info', (req, res) => {
 
 
 app.get('/teste', (req, res) => {
-    res.status(900).send(JSON.stringify(processes));
+    //res.status(900).send(JSON.stringify(processes));
+    var child_process = require("child_process");
+    var returncommand = child_process.execSync("streamlink https://www.youtube.com/watch?v=0M5uIYQCKyU best --stdout | ffprobe -show_format -pretty -loglevel quiet -");
+    res.setHeader('content-type', 'application/json');
+    res.send(returncommand);
 });
 
 app.get('/status', (req, res) => {
@@ -208,6 +229,9 @@ app.get('/status', (req, res) => {
     data += '</table>';
     res.send(data);
 })
+
+
+
 
 // help page, captured from github pages
 app.get('/', async function(req, res) {
@@ -298,4 +322,28 @@ function addprocess(url, PID, app, command) {
 // remove process
 function removeprocess(PID) {
     processes = processes.filter(val => val.PID !== PID);
+}
+
+function ffprobeStreamlink(url) {
+    var child_process = require("child_process");
+    var returncommand = child_process.execSync(config.streamlinkpath + "streamlink " + url + " best --stdout | " + config.ffmpegpath + "ffprobe -v quiet -print_format json -show_format -show_streams -");
+
+    return returncommand;
+}
+
+function checkStreamlink(url) {
+    var child_process = require("child_process");
+    var command = config.streamlinkpath + "streamlink " + url + " best --stdout | " + config.ffmpegpath + "ffprobe -v quiet -print_format json -show_format -show_streams -";
+    var status = "";
+    try {
+        retunrcommand = require('child_process').execSync(command);
+        status = "online";
+    } catch (e) {
+        status = "offline";
+        erro = e.message;
+    }
+    return { streamurl: url, streamstatus: status, mensagem: erro };
+
+
+
 }
