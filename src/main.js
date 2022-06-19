@@ -2,14 +2,19 @@
 /* Stream Proxy - A Proxy a Livestream  */
 /* Desenvolvido por Alexander Sabino    */
 /************************************** */
+
 const { spawn } = require('child_process');
 const express = require('express');
 var config = {};
+var processes = [];
+//import { loadconfig, addprocess } from './functions.js'
+
 
 //console.log("port: " + config.port);
-
+console.log("antes de ler as configurações");
 //initialcheck();
 loadconfig();
+console.log("apos de ler as configurações");
 // Initialization of variables
 const app = express();
 var portlisten = process.argv[2];
@@ -49,12 +54,15 @@ app.get('/videostream/streamlink', (req, res) => {
     stream.on('spawn', () => { // on app initialization
 
         var spawncommand = stream.spawnargs;
-        //spawncommand = spawncommand.ReplaceAll(",", " ");
-
+        //console.log("to string " + spawncommand.toString());
+        spawncommand = spawncommand.toString();
+        spawncommand = spawncommand.replace(/,/g, ' ');
+        addprocess(url, stream.pid, "streamlink", spawncommand);
         console.log(`running streamlink app (PID ${stream.pid}) [${spawncommand}]`);
     })
     stream.on('close', (code, signal) => { // on app closed
         console.log(`close stop of PID ${stream.pid}, code ${code}, signal ${signal}`);
+        removeprocess(stream.pid);
 
     })
 
@@ -93,8 +101,10 @@ app.get('/videostream/ffmpeg', (req, res) => {
     stream.on('spawn', () => { // on app initialization
 
         var spawncommand = stream.spawnargs;
+        spawncommand = spawncommand.toString();
+        spawncommand = spawncommand.replace(/,/g, ' ');
         //spawncommand = spawncommand.ReplaceAll(",", " ");
-
+        addprocess(url, stream.pid, "ffmpeg", spawncommand);
         console.log(`running ffmpeg app (PID ${stream.pid}) [${spawncommand}]`);
     })
     stream.on('close', (code, signal) => { // on app closed
@@ -169,11 +179,35 @@ app.get('/info', (req, res) => {
     res.json({ teste: "true" });
 });
 
-/*
+
 app.get('/teste', (req, res) => {
-    res.status(900, "teste1234").send('Teste de erro');
+    res.status(900).send(JSON.stringify(processes));
 });
-*/
+
+app.get('/status', (req, res) => {
+    var data = "";
+    data += '<h1> Status </h1><br>';
+    data += '<table style="border-collapse: collapse; width: 100%; height: 33px;" border="1">';
+    data += '<tbody>';
+    data += '<tr style="background-color: blue;">';
+    data += '<td style="width: 11.3163%; height: 15px;"><span style="color: #ffffff;">PID</span></td>';
+    data += '<td style="width: 41.714%; height: 15px;"><span style="color: #ffffff;">Url</span></td>';
+    data += '<td style="width: 12.8314%; height: 15px;"><span style="color: #ffffff;">App</span></td>';
+    data += '<td style="width: 34.1383%;"><span style="color: #ffffff;">Command</span></td>';
+    data += '</tr>';
+    processes.forEach(function(table) {
+        data += '<tr style="height: 18px;">';
+        data += `<td style="width: 11.3163%; height: 18px;">${table.PID}</td>`;
+        data += `<td style="width: 41.714%; height: 18px;">${table.url}</td>`;
+        data += `<td style="width: 12.8314%; height: 18px;">${table.app}</td>`;
+        data += `<td style="width: 34.1383%;">${table.command}</td>`;
+        data += '</tr>';
+    })
+
+    data += '</tbody>';
+    data += '</table>';
+    res.send(data);
+})
 
 // help page, captured from github pages
 app.get('/', async function(req, res) {
@@ -217,6 +251,7 @@ function announceServers() {
 }
 */
 
+/* Functions */
 // Load configuration
 function loadconfig() {
     try {
@@ -253,4 +288,14 @@ function loadconfig() {
     //}
 
 
+}
+
+// add process
+function addprocess(url, PID, app, command) {
+    processes.push({ url: url, PID: PID, app: app, command: command });
+}
+
+// remove process
+function removeprocess(PID) {
+    processes = processes.filter(val => val.PID !== PID);
 }
