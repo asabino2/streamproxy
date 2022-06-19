@@ -11,10 +11,8 @@ var processes = [];
 
 
 //console.log("port: " + config.port);
-console.log("antes de ler as configurações");
 //initialcheck();
 loadconfig();
-console.log("apos de ler as configurações");
 // Initialization of variables
 const app = express();
 var portlisten = process.argv[2];
@@ -167,7 +165,7 @@ app.get('/api/streaminfo', (req, res) => {
 // Check stream: http://<ip>:<port>?url=<url>
 app.get('/api/checkstream', (req, res) => {
     url = req.query.url;
-    var commandffmpeg = config.ffmpegpath + "ffmpeg -ss 00:00:01 -i \"" + url + "\" -vframes 1 -q:v 2 -f null -";
+    var commandffmpeg = config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i \"" + url + "\" -vframes 1 -q:v 2 -f null -";
     var status = "";
     var erro = "";
 
@@ -333,8 +331,9 @@ function ffprobeStreamlink(url) {
 
 function checkStreamlink(url) {
     var child_process = require("child_process");
-    var command = config.streamlinkpath + "streamlink " + url + " best --stdout | " + config.ffmpegpath + "ffprobe -v quiet -print_format json -show_format -show_streams -";
+    var command = config.streamlinkpath + "streamlink " + url + " best --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f null -";
     var status = "";
+    var erro = "";
     try {
         retunrcommand = require('child_process').execSync(command);
         status = "online";
