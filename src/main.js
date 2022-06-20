@@ -1,10 +1,11 @@
-/****************************************/
-/* Stream Proxy - A Proxy a Livestream  */
-/* Desenvolvido por Alexander Sabino    */
-/************************************** */
+/********************************************/
+/* Stream Proxy - A Proxy for a Livestream  */
+/* Desenvolvido por Alexander Sabino        */
+/********************************************/
 
 const { spawn } = require('child_process');
 const express = require('express');
+const os = require('os');
 var config = {};
 var processes = [];
 var debug = { PID: 0, url: "", app: "", command: "", statusExec: "", lastEvent: "", exitCode: "", exitSignal: "", message: "" };
@@ -35,15 +36,24 @@ console.log("");
 console.log("starting...")
 console.log("");
 console.log("streamproxy is listening on port ", config.port)
+console.log("try http://" + os.hostname + ":" + config.port + "/ or http://localhost:" + config.port + "/");
 console.log("");
 console.log("");
 console.log("");
+/*
+console.log("OS Platform: " + os.platform);
+console.log("Hostname: " + os.hostname);
+console.log("Arch: " + os.arch);
+console.log("port configured:" + config.port);
+console.log("streamlink path:" + config.streamlinkpath);
+*/
 
 // Service for streamlink stream proxy
 app.get('/videostream/streamlink', (req, res) => {
 
 
     url = req.query.url;
+    url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
     console.log(`opening connect to stream in url ${url}`);
 
     const stream = spawn(config.streamlinkpath + "streamlink", [url, 'best', '--stdout']);
@@ -130,6 +140,7 @@ app.get('/videostream/streamlink', (req, res) => {
 
 app.get('/videostream/ffmpeg', (req, res) => {
     url = req.query.url;
+    url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
     console.log(`opening connect to stream in url ${url} for ffmpeg`);
     const stream = spawn(config.ffmpegpath + 'ffmpeg', ['-loglevel', 'fatal', '-i', url, '-vcodec', config.ffmpeg.codec, '-acodec', 'aac', '-b', '15000k', '-strict', '-2', '-mbd', 'rd', '-copyinkf', '-flags', '+ilme+ildct', '-fflags', '+genpts', '-metadata', 'service_provider=' + config.ffmpeg.serviceprovider, '-f', config.ffmpeg.format, '-tune', 'zerolatency', '-']);
 
@@ -211,6 +222,7 @@ app.get('/videostream/ffmpeg', (req, res) => {
 // Get streaminfo: http://<ip>:<port>?url=<url>
 app.get('/api/streaminfo', (req, res) => {
     url = req.query.url;
+    url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
     var returncommand = "";
     var commandffmpeg = config.ffmpegpath + "ffprobe -v quiet -print_format json -show_format -show_streams " + url;
     var status = "";
@@ -240,6 +252,8 @@ app.get('/api/streaminfo', (req, res) => {
 // Check stream: http://<ip>:<port>?url=<url>
 app.get('/api/checkstream', (req, res) => {
     url = req.query.url;
+    url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
+
     var commandffmpeg = config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i \"" + url + "\" -vframes 1 -q:v 2 -f null -";
     var status = "";
     var erro = "";
@@ -312,6 +326,13 @@ app.get('/status', (req, res) => {
 // help page, captured from github pages
 app.get('/', async function(req, res) {
     const https = require("https");
+    const serversearch = "&lt;serverip&gt;";
+    const portsearch = "&lt;port&gt;";
+    const localhostsearch = "localhost:3000";
+
+    const serverreplacer = new RegExp(serversearch, 'g');
+    const portreplacer = new RegExp(portsearch, 'g');
+    const localhostreplacer = new RegExp(localhostsearch, 'g');
     https.get('https://raw.githubusercontent.com/asabino2/streamproxy/master/README.md', (resp) => {
         let data = '';
 
@@ -324,6 +345,9 @@ app.get('/', async function(req, res) {
         // The whole response has been received. Print out the result.
         resp.on('end', () => {
             //console.log("response data: " + data);
+            data = data.replace(serverreplacer, req.hostname);
+            data = data.replace(portreplacer, config.port);
+            data = data.replace(localhostreplacer, req.hostname + ":" + config.port);
             res.send(data);
         });
 
@@ -358,10 +382,12 @@ function loadconfig() {
         const fs = require("fs");
         const jsonString = fs.readFileSync("./streamproxy.config.json");
         config = JSON.parse(jsonString);
+
     } catch (err) {
 
         //console.log("error on loading configfile: " + err)
         config = { port: 3000, stramlinkpath: "", ffmpegpath: "", ffmpeg: { codec: "mpeg2video", format: "mpegts", serviceprovider: "streamproxy" } };
+
     }
 
     if (config.streamlinkpath == undefined) {
@@ -408,10 +434,12 @@ function ffprobeStreamlink(url) {
 }
 
 function checkStreamlink(url) {
-    var child_process = require("child_process");
-    var command = config.streamlinkpath + "streamlink " + url + " best --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f null -";
     var status = "";
     var erro = "";
+
+    var child_process = require("child_process");
+    var command = config.streamlinkpath + "streamlink " + url + " best --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f null -";
+
     try {
         retunrcommand = require('child_process').execSync(command);
         status = "online";

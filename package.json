@@ -1,6 +1,6 @@
 {
     "name": "streamproxy",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "description": "Stream Proxy - A proxy for your streams",
     "keywords": [
         "streamproxy",
@@ -14,7 +14,7 @@
         "compile-all": "npm run compile-win && npm run compile-linux && npm run compile-NAS"
     },
     "author": "Alexander Sabino <asabino2@gmail.com>",
-    "license": "GNU",
+    "license": "GPL-3.0",
     "repository": "github:asabino2/streamproxy",
     "bugs": {
         "url": "https://github.com/asabino2/streamproxy/issues"
