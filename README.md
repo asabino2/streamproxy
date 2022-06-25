@@ -97,6 +97,7 @@
 <li>Ex: if token tag is present in config file with value "testetoken", to play skynews youtube channel you need to call url like this: http://localhost:3000//videostream/streamlink?url=https://www.youtube.com/c/SkyNews/live&amp;token=testetoken, otherwise will fail with 401 unauthorized error</li>
 </ul>
 </li>
+<li>Now you can choose the endpoints that will be restricted if the token tag exists in the configuration file and is different from the one sent in the url token parameter, just fill the restrictedEndpoints tag with the endpoints you want to restrict (this tag is an array)</li>
 </ul>
 <hr />
 <p>there are a docker version of streamproxy at <a href="https://hub.docker.com/repository/docker/asabino2/streamproxy">https://hub.docker.com/repository/docker/asabino2/streamproxy</a></p>

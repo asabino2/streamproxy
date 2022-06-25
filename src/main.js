@@ -8,7 +8,7 @@ const express = require('express');
 const os = require('os');
 var config = {};
 var processes = [];
-var debug = { PID: 0, url: "", app: "", command: "", statusExec: "", lastEvent: "", exitCode: "", exitSignal: "", message: "", lastError: "" };
+var debug = { PID: 0, url: "", endpoint: "", remoteIP: "", app: "", command: "", statusExec: "", lastEvent: "", exitCode: "", exitSignal: "", message: "", lastError: "", lastConsoleData: { stdErr: "", stdin: "" } };
 var pageTitle = "";
 //var cookieParser = require('cookie-parser');
 //import { loadconfig, addprocess } from './functions.js'
@@ -61,6 +61,8 @@ app.get('/videostream/streamlink', (req, res) => {
     appsetheader(res);
     var clientIP = req.ip;
     url = req.query.url;
+    debug.remoteIP = req.ip;
+    debug.endpoint = req.path;
     url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
     console.log(`opening connect to stream in url ${url} from ${clientIP}`);
 
@@ -88,6 +90,7 @@ app.get('/videostream/streamlink', (req, res) => {
         debug.message = "On Spawn command";
         debug.statusExec = "Running";
 
+
     })
     stream.on('close', (code, signal) => { // on app closed
         console.log(`close stop of PID ${stream.pid}, code ${code}, signal ${signal}`);
@@ -103,6 +106,19 @@ app.get('/videostream/streamlink', (req, res) => {
         debug.statusExec = "closed";
 
 
+    })
+
+    stream.stdout.on('data', (data) => {
+        //console.log("data len " + data.length + "\r");
+        //process.stdout.write("data len " + data.length + "\r");
+    })
+
+    stream.stderr.on('data', (data) => {
+        debug.lastConsoleData.stdErr = data.toString();
+    })
+
+    stream.stdin.on('data', (data) => {
+        debug.lastConsoleData.stdin = data.toString();
     })
 
     stream.on('exit', (code, signal) => {
@@ -160,6 +176,8 @@ app.get('/videostream/ffmpeg', (req, res) => {
     url = req.query.url;
     url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
     var clientIP = req.ip;
+    debug.remoteIP = req.ip;
+    debug.endpoint = req.path;
     console.log(`opening connect to stream in url ${url} for ffmpeg from ${clientIP}`);
     const stream = spawn(config.ffmpegpath + 'ffmpeg', ['-loglevel', 'fatal', '-i', url, '-vcodec', config.ffmpeg.codec, '-acodec', 'aac', '-b', '15000k', '-strict', '-2', '-mbd', 'rd', '-copyinkf', '-flags', '+ilme+ildct', '-fflags', '+genpts', '-metadata', 'service_provider=' + config.ffmpeg.serviceprovider, '-f', config.ffmpeg.format, '-tune', 'zerolatency', '-']);
 
@@ -226,6 +244,15 @@ app.get('/videostream/ffmpeg', (req, res) => {
         debug.lastError = err;
         res.status(500).send("<h2>Error on calling ffmpeg app</h2><br>" + err)
     })
+
+    stream.stderr.on('data', (data) => {
+        debug.lastConsoleData.stdErr = data.toString();
+    })
+
+    stream.stdin.on('data', (data) => {
+        debug.lastConsoleData.stdin = data.toString();
+    })
+
 
     stream.on('message', (message, sendHandle) => {
         console.log(`message: ${message}`);
@@ -408,27 +435,57 @@ app.get('/audiostream/play', (req, res) => {
 
     url = req.query.url;
     url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
+    var runner = req.query.runner;
+    console.log("*** Convert videostream to audiostream")
+    console.log("you selected the runner " + runner)
     var stream = "";
     var title = req.query.title;
+
     var clientIP = req.ip;
+    debug.remoteIP = req.ip;
+    debug.endpoint = req.path;
+    var metadata = "";
+    if (title == undefined) {
+        title = "streamproxy audio";
+    }
+    metadata = `-metadata icy-aim="N/A" -metadata icy-br=128 -metadata icy-genre="misc" -metadata icy-icq="N/A" -metadata icy-irc="N/A" -metadata icy-name="streamproxy" -metadata icy-prebuffer=64000 -metadata icy-pub=1 -metadata StreamTitle="${title}" -metadata title="${title}"`;
     if (os.platform == 'win32') {
         //res.status(500).send("This endpoint is avaiable only in linux platform")
 
         console.log(`opening connect to stream in url ${url} for audiconverter with ffmpeg in win32 platform (from ${clientIP})`);
-        stream = spawn(config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' -c:v none -c:a libmp3lame -b:a 320k -joint_stereo 0 -y -f mp3 -metadata artist="streamproxy" -metadata title="' + title + '"  -', { shell: 'powershell.exe' });
+        stream = spawn(config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' -c:v none -c:a libmp3lame -b:a 320k -joint_stereo 0 -y -f mp3 -metadata artist=\'streamproxy\' -metadata title=\'' + title + '\'  -', { shell: 'powershell.exe' });
     } else {
 
-        if (title == undefined) {
-            title = "streamproxy audio";
+
+
+
+        if (runner == undefined) {
+            if (checkIfstreamlinkCanHandle(url) == true) {
+                runner = "streamlink"
+                console.log("System selected the runner " + runner);
+            } else {
+                runner = "ffmpeg"
+                console.log("System selected the runner " + runner);
+            }
         }
 
-        if (checkIfstreamlinkCanHandle(url) == true) {
-            console.log(`opening connect to stream in url ${url} for audiconverter with streamlink and ffmpeg (from ${clientIP})`);
-            stream = spawn(config.streamlinkpath + 'streamlink ' + url + ' best --stdout | ' + config.ffmpegpath + 'ffmpeg  -loglevel error -i pipe:0 -c:v none -c:a libmp3lame -b:a 320k -joint_stereo 0 -y -f mp3 -metadata artist="streamproxy" -metadata title="' + title + '"  -', { shell: true });
-        } else {
-            console.log(`opening connect to stream in url ${url} for audiconverter with ffmpeg (from ${clientIP})`);
-            stream = spawn(config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' -c:v none -c:a libmp3lame -b:a 320k -joint_stereo 0 -y -f mp3 -metadata artist="streamproxy" -metadata title="' + title + '"  -', { shell: true });
+
+        switch (runner) {
+            case "streamlink":
+                console.log(`opening connect to stream in url ${url} for audiconverter with streamlink and ffmpeg (from ${clientIP})`);
+                stream = spawn(config.streamlinkpath + 'streamlink ' + url + ' best --stdout | ' + config.ffmpegpath + 'ffmpeg  -loglevel error -i pipe:0 -c:v none -c:a libmp3lame -b:a 128k -joint_stereo 0 -y -f mp3 ' + metadata + ' -', { shell: true });
+                //stream = spawn(config.streamlinkpath + 'streamlink ' + url + ' best --stdout', { shell: true });
+                break;
+            case "ffmpeg":
+                console.log(`opening connect to stream in url ${url} for audiconverter with ffmpeg (from ${clientIP})`);
+                stream = spawn(config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' -c:v none -c:a libmp3lame -b:a 128k -joint_stereo 0 -y -f mp3 ' + metadata + '  -', { shell: true });
+                break;
+            default:
+                console.log("runner " + runner + " is invalid");
+                res.status(500).send("invalid runner");
+                return false;
         }
+
 
 
     }
@@ -511,6 +568,14 @@ app.get('/audiostream/play', (req, res) => {
         console.log(`kill PID ${stream.pid} of program ffmpeg/streamlink`)
         removeprocess(stream.pid);
         stream.kill();
+    })
+
+    stream.stderr.on('data', (data) => {
+        debug.lastConsoleData.stdErr = data.toString();
+    })
+
+    stream.stdin.on('data', (data) => {
+        debug.lastConsoleData.stdin = data.toString();
     })
 
 
@@ -672,11 +737,25 @@ function appsetheader(res) {
 }
 
 function checkToken(req, res) {
+    var endpointRestricted = false;
+
     if (config.token == undefined || config.token == "") //if doesn't have token tag in config file, always return true (access ok)
     {
         return true;
     }
-    if (req.query.token != config.token) {
+
+
+
+    if (config.restrictedEndpoints == undefined) {
+        endpointRestricted = true;
+    }
+
+    if (config.restrictedEndpoints.length == 0 || config.restrictedEndpoints.indexOf(req.path) >= 0) {
+        endpointRestricted = true;
+    }
+
+
+    if (req.query.token != config.token && (endpointRestricted == true)) {
         res.status(401).send("invalid token");
         return false;
     } else {
