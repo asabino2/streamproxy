@@ -28,28 +28,41 @@
 </ul>
 <p>&nbsp;</p>
 <ul>
-<li>http://&lt;serverip&gt;:&lt;port&gt;/videostream/ffmpeg?url=&lt;livestreamurl&gt;
+<li>http://&lt;serverip&gt;:&lt;port&gt;/videostream/ffmpeg?url=&lt;livestreamurl&gt;</li>
+</ul>
+<ul>
+<li style="list-style-type: none;">
 <ul>
 <li>The livestream will be routed and transcoded to MPEG-2 TS format from a live stream url of any url that ffmpeg supports.</li>
 <li>Ex: http://localhost:3000/videostream/ffmpeg?url=https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8<br />To display the live stream of Redbull TV in MPEG2 TS format on your iptv app</li>
 </ul>
-<p>&nbsp;</p>
 </li>
-<li>http://&lt;serverip&gt;:&lt;port&gt;/api/streaminfo?url=&lt;livestreamurl&gt;
-<ul>
-<li>Retrieve livestream information through ffprobe, output will be in json format</li>
-<li>Ex: http://localhost:3000/videostream/info?url=https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8<br />Displays information about the Redbull TV livestream</li>
 </ul>
 <p>&nbsp;</p>
+<p>&nbsp;</p>
+<ul>
+<li>http://&lt;serverip&gt;:&lt;port&gt;/audiostream/play?url=&lt;livestreamurl&gt;
+<ul>
+<li>convert video livestream to audiolivestream (mp3 format), now you can listen youtube channels</li>
+<li>Ex: http://localhost:3000/videostream/info?url=https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8<br />convert the TV RED BULL to a streaming radio station. NOTE: In windows platforms is only possible to convert videostrem to audiostream from ffmpeg (streamlink is not possible)</li>
+</ul>
 </li>
+</ul>
+<p>&nbsp;</p>
+<ul>
 <li>http://&lt;serverip&gt;:&lt;port&gt;/api/checkstream?url=&lt;livestreamurl&gt;
-<ul>
-<ul>
 <ul>
 <li>checks if a stream is online or offline, the output will be in json format</li>
 <li>Ex: http://localhost:3000/videostream/info?url=https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8<br />returns if the Redbull TV stream is online</li>
 </ul>
+</li>
 </ul>
+<p>&nbsp;</p>
+<ul>
+<li>http://&lt;serverip&gt;:&lt;port&gt;/api/streaminfo?url=&lt;livestreamurl&gt;
+<ul>
+<li>Retrieve livestream information through ffprobe, output will be in json format</li>
+<li>Ex: http://localhost:3000/videostream/info?url=https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8<br />Displays information about the Redbull TV livestream</li>
 </ul>
 <p>&nbsp;</p>
 </li>
@@ -70,7 +83,7 @@
    "codec": "mpeg2video",
    "format": "mpegts",
    "serviceprovider": "streamproxy"
- } 
+ },<br /> "token": "yourtoken" (optional) 
 }</code></pre>
 <ul>
 <li>Port: The listening port of server</li>
@@ -79,6 +92,11 @@
 <li>codec: the video codec of transcoded ffmpeg's stream</li>
 <li>format: the video container of transcoded ffmpeg's stream</li>
 <li>serviceprovider: the service provider of transcoded ffmpeg's stream</li>
+<li>token: protect your server to be acessed from a unauthorized user, if token tag is present in config file, you must to use token query parameter to access api, videostream and audiostream endpoints
+<ul>
+<li>Ex: if token tag is present in config file with value "testetoken", to play skynews youtube channel you need to call url like this: http://localhost:3000//videostream/streamlink?url=https://www.youtube.com/c/SkyNews/live&amp;token=testetoken, otherwise will fail with 401 unauthorized error</li>
+</ul>
+</li>
 </ul>
 <hr />
 <p>there are a docker version of streamproxy at <a href="https://hub.docker.com/repository/docker/asabino2/streamproxy">https://hub.docker.com/repository/docker/asabino2/streamproxy</a></p>

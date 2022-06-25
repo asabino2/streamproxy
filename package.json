@@ -1,6 +1,6 @@
 {
     "name": "streamproxy",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "description": "Stream Proxy - A proxy for your streams",
     "keywords": [
         "streamproxy",
@@ -21,7 +21,6 @@
     },
     "homepage": "https://github.com/asabino2/streamproxy",
     "dependencies": {
-
         "debug": "^4.1.1",
         "elliptic": "^6.5.4",
         "express": "^4.18.1",
