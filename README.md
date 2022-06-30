@@ -47,6 +47,13 @@
 <li>Ex: http://localhost:3000/videostream/info?url=https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8<br />convert the TV RED BULL to a streaming radio station. NOTE: In windows platforms is only possible to convert videostrem to audiostream from ffmpeg (streamlink is not possible)</li>
 </ul>
 </li>
+<li>http://&lt;serverip&gt;:&lt;port&gt;/videostream/play?url=&lt;livestreamurl&gt;
+<ul>
+<li>Convert a streamlink's stream to MPEG-2 TS</li>
+<li>Ex: http://localhost:3000//videostream/streamlink?url=https://www.youtube.com/c/SkyNews/live<br />To display the skynews live stream on your iptv app (in MPEG-2 TS format)</li>
+<li><strong>Note: due to compatibility issues, this endpoint cannot run if the server is installed on windows</strong></li>
+</ul>
+</li>
 </ul>
 <p>&nbsp;</p>
 <ul>
@@ -71,6 +78,16 @@
 <li>see status of opened process</li>
 </ul>
 </li>
+<li>http://&lt;serverip&gt;:&lt;port&gt;/login
+<ul>
+<li>use to login in server (if basicAuthentication is present in config file)</li>
+</ul>
+</li>
+<li>http://&lt;serverip&gt;:&lt;port&gt;/logout
+<ul>
+<li>use to logout from server (if basicAuthentication is present in config file)</li>
+</ul>
+</li>
 </ul>
 <hr />
 <h3>streamproxy.config.json</h3>
@@ -83,7 +100,11 @@
    "codec": "mpeg2video",
    "format": "mpegts",
    "serviceprovider": "streamproxy"
- },<br /> "token": "yourtoken" (optional) 
+ },<br /> "token": "yourtoken", (optional)<br /></code></pre>
+<div>
+<div>&nbsp; "basicAuthentication": { "active": true, "users": [{ "username": "teste", "password": "teste2" }] } (optional, if exist, server will be require login in all endpoints)</div>
+</div>
+<pre><code> 
 }</code></pre>
 <ul>
 <li>Port: The listening port of server</li>
@@ -98,6 +119,7 @@
 </ul>
 </li>
 <li>Now you can choose the endpoints that will be restricted if the token tag exists in the configuration file and is different from the one sent in the url token parameter, just fill the restrictedEndpoints tag with the endpoints you want to restrict (this tag is an array)</li>
+<li>Now, in addition to using token, you can create logins to allow access to all endpoints. The server will use Basic Authentication, so to use the videostream url in your IPTV app you should use: http://&lt;username&gt;:&lt;password&gt;@&lt;IP&gt;:&lt;port&gt;/videostream/streamlink?url=&lt;url address from the live stream &gt;<br />The token is now obsolete and may be retired from future versions</li>
 </ul>
 <hr />
 <p>there are a docker version of streamproxy at <a href="https://hub.docker.com/repository/docker/asabino2/streamproxy">https://hub.docker.com/repository/docker/asabino2/streamproxy</a></p>
