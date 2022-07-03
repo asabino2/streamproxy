@@ -54,6 +54,32 @@
 <li><strong>Note: due to compatibility issues, this endpoint cannot run if the server is installed on windows</strong></li>
 </ul>
 </li>
+<li>http://&lt;serverip&gt;:&lt;port&gt;/streamserver/create?url=&lt;livestreamurl&gt;&amp;port=&lt;serverport&gt;
+<ul>
+<li>creates a livestream server for the video that is in the url, the &lt;serverport&gt; parameter is optional and will determine which port the server will be created on. With this server you can make a livestream available in a single thread and it will be served to several users (just access the server url). This endpoint must be called from a browser. To close this server session, just kill the corresponding process in the status page (/status)</li>
+<li><strong>note that for now only streams compatible with the streamlink will be accepted. ffmpeg compatible streams will be added in a future release</strong></li>
+<li><strong>This endpoint is in beta version</strong></li>
+<li>Ex: http://localhost:3000/streamserver/create?url=https://www.youtube.com/c/SkyNews/live&amp;port=4212, to server skynews livestream from youtube in <a href="http://localhost:4212">http://localhost:4212</a> (to play the stream run, for exemple, ffplay <a href="http://localhost:4211">http://localhost:4211</a>)</li>
+</ul>
+</li>
+<li>http://&lt;serverip&gt;:&lt;port&gt;/videostream/restream?url=&lt;livestream&gt;&amp;output=&lt;outputaddress&gt;&amp;format=&lt;format&gt;&amp;vcode=&lt;videocoded&gt;&amp;acodec=&lt;audiocodec&gt;
+<ul>
+<li>Restream a livestream to another address (rtmp for exemple)</li>
+<li>url parameters
+<ul>
+<li>&lt;livestream&gt;: the source livestream url (in linux can be streamlink or ffmpeg compatible, in windows only ffmpeg compatible stream is acceptable)</li>
+<li>&lt;outputaddress&gt;: the destination livestream address (can be a youtube rtmp address, nginx rtmp address, http livestream server address, etc...)</li>
+<li>&lt;format&gt;: the format of livestream (mpeg2-ts, hls, mp3, etc...)</li>
+<li>&lt;videocodec&gt;: the video codec (mp4, mpeg2, h264, etc...), this parameter is optional, if ommited the video codec is copied from source</li>
+<li>&lt;audiocodec&gt;: the audio codec (mp3, aac,&nbsp; etc...), this parameter is optional, if ommited the audio codec is copied from source</li>
+<li><strong>This endpoint is in beta version</strong></li>
+<li>Ex: http://localhost:3000/videostream/restream?url=https://www.youtube.com/c/SkyNews/live&amp;output=rtmp://localhost:4113/live&amp;format=mpeg2ts&amp;vcode=mpeg2&amp;acodec=mp3 -&gt; restream the skynews youtube channel to rtmp://localhost:4113/live</li>
+<li>This endpoint must be called from browser</li>
+<li>To kill session, kill correspondent process from /status</li>
+</ul>
+</li>
+</ul>
+</li>
 </ul>
 <p>&nbsp;</p>
 <ul>
