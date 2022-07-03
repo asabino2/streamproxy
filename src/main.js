@@ -8,6 +8,10 @@ const express = require('express');
 const os = require('os');
 var config = {};
 var processes = [];
+var databuf = { header: [{ bytes: [] }], data: undefined };
+var databufheaderlen = 4;
+var mydatabuf = undefined;
+
 var debug = { PID: 0, url: "", endpoint: "", remoteIP: "", app: "", command: "", statusExec: "", lastEvent: "", exitCode: "", exitSignal: "", message: "", lastError: "", lastConsoleData: { stdErr: "", stdin: "" } };
 var pageTitle = "";
 //var cookieParser = require('cookie-parser');
@@ -39,7 +43,7 @@ console.log("\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\
 console.log("                                         A Proxy for the livestreams                   ")
 console.log(`                                             version ${pjson.version}                  `)
 console.log("                              Developed by Alexander Sabino (asabino2.github.io)       ")
-console.log("                                           Rio de Janeiro - Brazil                     ")
+console.log("                                           Rio de Janeiro - Brazil1                     ")
 
 
 
@@ -55,6 +59,8 @@ console.log("");
 
 // Service for streamlink stream proxy
 app.get('/videostream/streamlink', (req, res) => {
+    var bufcount = 0;
+
     if (checkToken(req, res) == false) {
         return false;
     };
@@ -76,12 +82,13 @@ app.get('/videostream/streamlink', (req, res) => {
 
     const stream = spawn(config.streamlinkpath + "streamlink", [url, 'best', '--stdout']);
     stream.stdout.pipe(res);
+
     stream.stderr.pipe(process.stderr);
 
     var spawncommand = stream.spawnargs;
     stream.on('spawn', () => { // on app initialization
 
-
+        databuf = { header: [], data: undefined };
         //console.log("to string " + spawncommand.toString());
         spawncommand = spawncommand.toString();
         spawncommand = spawncommand.replace(/,/g, ' ');
@@ -116,7 +123,28 @@ app.get('/videostream/streamlink', (req, res) => {
     })
 
     stream.stdout.on('data', (data) => {
+        /*
+                if (databuf.header.length < databufheaderlen) {
 
+                    databuf.header.push({ bytes: data });
+                } else {
+
+                    //console.log("linhas atuais: " + databuf.data.length);
+                    //console.log("databuf atual: " + databuf.toString);
+                    databuf.data = data;
+                    //console.log("databuf shifted: " + databuf.data.shift());
+                    // console.log("databuf not shifted: " + databuf.data);
+                    //console.log("databuf depois: " + databuf);
+
+                    //databuf.data.push({ bytes: data });
+
+                }
+        */
+
+
+        //bufcount++;
+        //console.log("databuf header length: " + databuf.header.length);
+        //console.log("databuf data length: " + databuf.data.length);
         setDataSize(stream.pid, data);
 
     })
@@ -387,19 +415,37 @@ app.get('/debug', (req, res) => {
     res.json(debug);
 })
 
-/*
+
 // only a test (will be used in future)
 app.get('/info', (req, res) => {
-    var PID = req.query.pid;
-    var pids = getChildProcess(PID);
-    console.log("pids returned from function: " + pids)
-    console.log("for earch");
-    pids.forEach((pid) => {
-        console.log("pid=> " + pid);
-    });
-    res.send("PIDS: " + pids);
+    /* try to create a http stream server, not sucessfully, maybe next release
+        const Stream = require('stream');
+        var buffered = false;
+
+        const readableStream = new Stream.Readable();
+        console.log(databuf.data.length + ' lines ReadableStream');
+        readableStream.pipe(res);
+
+        readableStream._read = () => {
+            if (buffered == false) {
+                databuf.header.forEach(data => {
+                    readableStream.push(data.bytes);
+                });
+                buffered = true;
+            } else {
+                readableStream.push(databuf.data);
+            }
+            
+
+        };
+    */
 });
-*/
+
+app.get('/info2', (req, res) => {
+    res.send(databuf);
+})
+
+
 app.post('/killProcess', (req, res) => {
 
     res.header('Access-Control-Allow-Origin', '*');
@@ -613,6 +659,7 @@ app.get('/status', (req, res) => {
             <tr>
               <th>PID</th>
               <th>URL</th>
+              <th>Output</th>
               <th>Endpoint</th>
               <th>Client</th>
               <th>Data Transferred</th>
@@ -631,22 +678,98 @@ app.get('/status', (req, res) => {
             catsize = 'GB';
         }
         datasize = datasize.toFixed(3);
-        data += `<tr>
-                  <td>${table.PID}</td>
-                  <td>${table.url}</td>
-                  <td>${table.endpoint}</td>
-                  <td>${table.clientIP}</td>
-                  <td>${datasize} ${catsize}</td>
-                  <td>${table.user}</td>
-                  <td>${table.command}</td>
-                  <td><button onclick="killProcess(${table.PID})" id="killbutton">kill process</button></td>
-                </tr>`;
+        data += `<tr>`
+        if (table.childprocess.length == 0) {
+            data += `<td>${table.PID}</td>`
+        } else {
+            data += `<td><a href="./status/${table.PID}">${table.PID}</a></td>`
+        }
+        data += `<td>${table.url}</td>`
+
+        if (table.streamlinkserver == true) {
+            data += `<td>http://${os.hostname}:${table.streamArgs}</td>`
+        } else if (table.restream == true) {
+            data += `<td>${table.streamArgs}</td>`
+        } else {
+            data += `<td>${req.ip}</td>`
+        }
+
+        data += `<td>${table.endpoint}</td>`
+        data += `<td>${table.clientIP}</td>`
+        if (table.streamlinkserver == false && table.restream == false) {
+            data += `<td>${datasize} ${catsize}</td>`
+        } else {
+            data += "<td>none</td>";
+        }
+
+        data += `<td>${table.user}</td>`
+        data += `<td>${table.command}</td>`
+        data += `<td><button onclick="killProcess(${table.PID})" id="killbutton">kill process</button></td>`
+        data += `</tr>`;
     })
 
 
     data += `</table>
              </body>
             </html>`;
+    res.send(data);
+})
+
+app.get('/status/*', (req, res) => {
+    var pidtoSee = req.path;
+    var data = "";
+    pidtoSee = pidtoSee.substring(pidtoSee.lastIndexOf('/') + 1);
+    var myprocess = processes.filter(process => process.PID == pidtoSee)
+    if (myprocess.length == 0) {
+        res.status(400).send(`PID ${pidtoSee} is not child from streamproxy`);
+        return false;
+    }
+
+    if (myprocess[0].childprocess.length == 0) {
+        res.status(400).send(`PID ${pidtoSee} doesn't have child processes`);
+        return false;
+    }
+
+    data += `<html>
+    <head> 
+    <style>
+    table {
+    border-collapse: collapse;
+    width: 100%;
+    }
+    th, td {
+    padding: 8px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+    }
+    tr:hover {background-color:#f5f5f5;}
+    th {
+         background-color: #ddd;
+       }
+
+
+
+    </style>
+
+    </head>
+    <body>
+    <h1>child processes from ${pidtoSee}</h1>
+    <table>
+    <tr>
+      <th>PID</th>
+      <th>command</th>
+     
+   </tr>`;
+
+    myprocess[0].childprocess.forEach(table => {
+        data += `<tr>`
+        data += `<td>${table.pid}</td>`;
+        data += `<td>${table.command}</td>`;
+        data += `<tr>`;
+    })
+    data += `</table>`;
+    data += `</body>`;
+    data += `</html>`;
     res.send(data);
 })
 
@@ -1029,6 +1152,219 @@ app.get('/videostream/play', (req, res) => {
 });
 
 
+app.get('/streamserver/create', (req, res) => {
+    var auth = basicAuth(req, res);
+    var port = req.query.port;
+    if (port == undefined) {
+        port = config.port + 1;
+    }
+    if (auth.authenticated == false) {
+        return false;
+    }
+
+    streamlinkHTTPServer(req, res, auth, port);
+    res.send(`<h2>server created, see it in http://${os.hostname}:${port}</h2>`)
+})
+
+
+app.get('/videostream/restream', (req, res) => {
+    var PIDOffset = 0;
+    var command = "";
+    var format = req.query.format;
+    var vcodec = "";
+    var acodec = "";
+    var warning = "";
+    if (format == undefined) {
+        format = "flv";
+    }
+    if (checkToken(req, res) == false) {
+        return false;
+    };
+
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
+    var output = req.query.output;
+    if (output == undefined) {
+        res.status(400).send("<h1>400 Bad Request - the query parameter output is required</h1>");
+        return false;
+    }
+
+    if (req.query.vcodec != undefined) {
+        vcodec = "-c:v " + req.query.vcodec;
+    }
+    if (req.query.acodec != undefined) {
+        acodec = "-c:a " + req.query.acodec;
+    }
+
+
+    appsetheader(res);
+
+    url = req.query.url;
+
+    announceStreaming(url);
+    url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
+    var runner = req.query.runner;
+    console.log("*** restream " + url + " to " + output);
+    console.log("you selected the runner " + runner)
+    var stream = "";
+
+
+    var clientIP = req.ip;
+    debug.remoteIP = req.ip;
+    debug.endpoint = req.path;
+
+
+
+
+
+
+
+
+    if (runner == undefined) {
+        if (checkIfstreamlinkCanHandle(url) == true) {
+            runner = "streamlink"
+            console.log("System selected the runner " + runner);
+            PIDOffset = 1;
+        } else {
+            runner = "ffmpeg"
+            console.log("System selected the runner " + runner);
+            PIDOffset = 0;
+        }
+    }
+
+
+    switch (runner) {
+        case "streamlink":
+            console.log(`opening connect for restream ${url} to ${output} with streamlink and ffmpeg (from ${clientIP})`);
+            if (os.platform != "win32") {
+                command = config.streamlinkpath + 'streamlink ' + url + ' best --stdout | ' + config.ffmpegpath + 'ffmpeg  -loglevel error -i pipe:0 -f ' + format + ' ' + output;
+            } else {
+                command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' ' + vcodec + ' ' + acodec + '  -f ' + format + ' ' + output;
+            }
+
+            break;
+        case "ffmpeg":
+            console.log(`opening connect for restream ${url} to ${output} with ffmpeg (from ${clientIP})`);
+            command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' ' + vcodec + ' ' + acodec + '  -f ' + format + ' ' + output;
+
+            break;
+        default:
+            console.log("runner " + runner + " is invalid");
+            res.status(500).send("invalid runner");
+            return false;
+    }
+    if (os.platform == 'win32') {
+        stream = spawn(command, { shell: 'powershell.exe' });
+    } else {
+        stream = spawn(command, { shell: true });
+    }
+
+
+
+
+
+    if (runner == 'streamlink' && os.platform == 'win32') {
+        warning = "note that as the server runs on windows platform, it is only possible to restream urls that are compatible with ffmpeg";
+    }
+
+
+    res.send(`<h2>restream started, url ${url} is restreaming to ${output} <h2><br><h3>${warning}</h3>`);
+    var spawncommand = stream.spawnargs;
+    stream.on('spawn', () => { // on app initialization
+
+
+        spawncommand = spawncommand.toString();
+        spawncommand = spawncommand.replace(/,/g, ' ');
+
+        addprocess(req, stream, auth.user, "restream", output)
+        console.log(`running ffmpeg app (PID ${stream.pid}) [${spawncommand}]`);
+        debug.PID = stream.pid;
+        debug.app = "audiostreamconverter";
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "spawn";
+        debug.exitCode = "";
+        debug.exitSignal = "";
+        debug.message = "On Spawn command";
+        debug.statusExec = "Running";
+    })
+    stream.on('close', (code, signal) => { // on app closed
+        console.log(`close stop of PID ${stream.pid}, code ${code}, signal ${signal}`);
+        removeprocess(stream.pid);
+        debug.PID = stream.pid;
+        debug.app = "audiostreamconverter";
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "close";
+        debug.exitCode = code;
+        debug.exitSignal = signal;
+        debug.message = "On close";
+        debug.statusExec = "closed";
+
+    })
+
+    stream.stdout.on('data', (data) => {
+
+        setDataSize(stream.pid, data);
+    })
+
+    stream.on('exit', (code, signal) => {
+        removeprocess(stream.pid);
+        debug.PID = stream.pid;
+        debug.app = "audiostreamconverter";
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "exit";
+        debug.exitCode = code;
+        debug.exitSignal = signal;
+        debug.message = "On exit";
+        debug.statusExec = "closed";
+
+    })
+
+    stream.on('error', (err) => { // on error on app
+        removeprocess(stream.pid);
+        debug.PID = stream.pid;
+        debug.app = "audiostreamconverter";
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "error";
+        debug.exitCode = "";
+        debug.exitSignal = "";
+        debug.message = err;
+        debug.statusExec = "closed with error";
+        console.log(`error ocurred: ${err}`);
+        debug.lastError = err;
+        res.status(500).send("<h2>Error on calling ffmpeg app</h2><br>" + err)
+
+    })
+
+    stream.on('message', (message, sendHandle) => {
+        console.log(`message: ${message}`);
+    })
+
+    req.on('close', () => { // on connection close, kill PID of app
+        // console.log(`closed connection of url ${url}`);
+        //  removeprocess(stream.pid);
+        //stream.kill();
+        // killProcesses(stream.pid);
+
+    })
+
+    stream.stderr.on('data', (data) => {
+        debug.lastConsoleData.stdErr = data.toString();
+    })
+
+    stream.stdin.on('data', (data) => {
+        debug.lastConsoleData.stdin = data.toString();
+    })
+
+
+});
+
+
 var server = app.listen(config.port);
 
 
@@ -1076,14 +1412,28 @@ function loadconfig() {
 }
 
 // add process
-function addprocess(req, spawn, user) {
+function addprocess(req, spawn, user, streamservertype, streamserverArgs) {
     var spawncommand = spawn.spawnargs;
     var PID = spawn.pid; // to do: use command pgrep -P PID para ver todos os processos subsequentes
     var childprocesses = getChildProcess(spawn.pid);
+    var streamlinkserver = false;
+    var restream = false;
+    //console("stream server type: " + streamservertype);
+    //console("stream args: " + streamserverArgs);
+    switch (streamservertype) {
+        case "streamlinkServer":
+            streamlinkserver = true;
+            break;
+        case "restream":
+            restream = true;
+            break;
+    }
+
+
     spawncommand = spawncommand.toString();
     spawncommand = spawncommand.replace(/,/g, ' ');
     console.log("added process " + PID + " to status");
-    processes.push({ url: req.query.url, PID: PID, childprocess: childprocesses, clientIP: req.ip, endpoint: req.path, command: spawncommand, dataSize: 0, user: user });
+    processes.push({ url: req.query.url, PID: PID, childprocess: childprocesses, clientIP: req.ip, endpoint: req.path, command: spawncommand, dataSize: 0, user: user, streamlinkserver: streamlinkserver, restream: restream, streamArgs: streamserverArgs });
 
 }
 
@@ -1251,6 +1601,7 @@ function getChildProcess(PID, globalpids = []) {
     var exitloop = false;
     var command = "";
     var returncommand = "";
+    var pscommand = undefined;
 
     try {
 
@@ -1266,17 +1617,22 @@ function getChildProcess(PID, globalpids = []) {
         returncommand = require('child_process').execSync(command)
         returncommand = returncommand.toString();
 
-
-        pids = returncommand.split('\n');
+        if (os.platform == 'win32') {
+            pids = returncommand.split('\r\n');
+        } else {
+            pids = returncommand.split('\n');
+        }
 
         pids = pids.filter(val => val !== '');
         if (pids.length <= 0) {
             globalpids = globalpids.filter(val => val !== '');
+
             return globalpids;
         }
 
         pids.forEach((pid) => {
-            globalpids.push(pid);
+            pscommand = getPIDData(pid);
+            globalpids.push({ pid: pid, command: pscommand.command });
             var dummy = getChildProcess(pid, globalpids);
         })
 
@@ -1296,8 +1652,8 @@ function killProcesses(parentPID) {
 
     if (childprocesses.length > 0) {
         childprocesses.forEach((pid) => {
-            process.kill(pid);
-            console.log("process " + pid + " killed");
+            process.kill(pid.pid);
+            console.log("process " + pid.pid + " killed");
         })
 
 
@@ -1315,4 +1671,130 @@ function announceStreaming(url) {
     console.log(url);
     console.log("*******************************************************************************************************");
     console.log("");
+}
+
+function getPIDData(pid) {
+    var command = "";
+    var returncommand = "";
+    var parts = [];
+    if (os.platform != "win32") {
+        command = "ps h --pid " + pid + " -o args";
+    } else {
+        command = `powershell -c "Get-WmiObject -Class Win32_Process -Filter ParentProcessID=${pid} | Select-Object -ExpandProperty CommandLine"`;
+    }
+
+    returncommand = require('child_process').execSync(command)
+    returncommand = returncommand.toString();
+
+    return { pid: pid, command: returncommand };
+
+}
+
+function streamlinkHTTPServer(req, res, auth, port = 0) {
+    appsetheader(res);
+    var clientIP = req.ip;
+    url = req.query.url;
+    announceStreaming(url);
+    debug.remoteIP = req.ip;
+    debug.endpoint = req.path;
+    url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
+    console.log(`opening connect to server stream in url ${url} from ${clientIP}`);
+
+    const stream = spawn(config.streamlinkpath + "streamlink", ['--player-continuous-http', '--player-external-http-port', port, '--player-external-http', url, 'best']);
+
+
+    var spawncommand = stream.spawnargs;
+    stream.on('spawn', () => { // on app initialization
+
+
+        //console.log("to string " + spawncommand.toString());
+        spawncommand = spawncommand.toString();
+        spawncommand = spawncommand.replace(/,/g, ' ');
+        addprocess(req, stream, auth.user, "streamlinkServer", port)
+        console.log(`running streamlink server app (PID ${stream.pid}) [${spawncommand}]`);
+        debug.PID = stream.pid;
+        debug.app = "streamlink";
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "spawn";
+        debug.exitCode = "";
+        debug.exitSignal = "";
+        debug.message = "On Spawn command";
+        debug.statusExec = "Running";
+
+
+    })
+    stream.on('close', (code, signal) => { // on app closed
+        console.log(`close stop of PID ${stream.pid}, code ${code}, signal ${signal}`);
+        removeprocess(stream.pid);
+        debug.PID = stream.pid;
+        debug.app = "streamlink";
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "close";
+        debug.exitCode = code;
+        debug.exitSignal = signal;
+        debug.message = "On close";
+        debug.statusExec = "closed";
+
+
+    })
+
+    stream.stdout.on('data', (data) => {
+
+        setDataSize(stream.pid, data);
+
+    })
+
+    stream.stderr.on('data', (data) => {
+        debug.lastConsoleData.stdErr = data.toString();
+    })
+
+    stream.stdin.on('data', (data) => {
+        debug.lastConsoleData.stdin = data.toString();
+    })
+
+    stream.on('exit', (code, signal) => {
+
+        removeprocess(stream.pid);
+        debug.PID = stream.pid;
+        debug.app = "streamlink";
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "exit";
+        debug.exitCode = code;
+        debug.exitSignal = signal;
+        debug.message = "On exit";
+        debug.statusExec = "closed";
+
+    })
+
+    stream.on('error', (err) => { // on error on app
+        removeprocess(stream.pid);
+        console.log(`error ocurred: ${err}`);
+        debug.PID = stream.pid;
+        debug.app = "streamlink";
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "error";
+        debug.exitCode = "";
+        debug.exitSignal = "";
+        debug.message = err;
+        debug.statusExec = "closed with error";
+        debug.lastError = err;
+        res.status(500).send("<h2>Error on calling streamlink app</h2><br>" + err)
+
+
+    })
+
+    stream.on('message', (message, sendHandle) => { // on message
+        console.log(`message: ${message}`);
+    })
+
+    req.on('close', () => { // on connection close, kill PID of app
+        //console.log(`closed connection of url ${url}`);
+        //console.log(`kill PID ${stream.pid} of program streamlink`)
+        //stream.kill();
+        //killProcesses(stream.pid);
+    })
 }

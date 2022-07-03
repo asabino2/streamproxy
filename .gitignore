@@ -1,3 +1,4 @@
 *.jpg
 /bin/
 /resources/
+compile*.bat
