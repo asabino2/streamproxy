@@ -3,3 +3,4 @@
 /resources/
 ./streamproxy.config.json
 compile*.bat
+/streamproxy.config.json

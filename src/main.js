@@ -7,10 +7,13 @@ const { spawn } = require('child_process');
 const express = require('express');
 const os = require('os');
 var config = {};
+var info = { pid: 0, platform: "", arch: "", freemem: 0, totalmem: 0, ostype: "", versions: { ffmpeg: "", streamlink: "", os: "" } }
 var processes = [];
 var databuf = { header: [{ bytes: [] }], data: undefined };
 var databufheaderlen = 4;
 var mydatabuf = undefined;
+const { PassThrough } = require("stream").Duplex;
+const tunnel = new PassThrough();
 
 var debug = { PID: 0, url: "", endpoint: "", remoteIP: "", app: "", command: "", statusExec: "", lastEvent: "", exitCode: "", exitSignal: "", message: "", lastError: "", lastConsoleData: { stdErr: "", stdin: "" } };
 
@@ -22,6 +25,7 @@ const { application, response } = require('express');
 
 
 loadconfig();
+getInfo();
 // Initialization of variables
 const app = express();
 var portlisten = process.argv[2];
@@ -63,7 +67,11 @@ console.log("");
 // Service for streamlink stream proxy
 app.get('/videostream/streamlink', (req, res) => {
     var bufcount = 0;
-
+    var stream = undefined;
+    var streamerror = undefined;
+    var streamstart = false;
+    var showErrorInStream = false;
+    var streamerrorpid = 0;
     if (checkToken(req, res) == false) {
         return false;
     };
@@ -73,6 +81,10 @@ app.get('/videostream/streamlink', (req, res) => {
         return false;
     }
 
+    if (config.showErrorInStream == true || req.query.showerrorinstream == 'true') {
+        showErrorInStream = true;
+        log("Show error in stream is enabled");
+    }
 
     appsetheader(res);
     var clientIP = req.ip;
@@ -83,8 +95,13 @@ app.get('/videostream/streamlink', (req, res) => {
     url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
     log(`opening connect to stream in url ${url} from ${clientIP}`);
 
-    const stream = spawn(config.streamlinkpath + "streamlink", [url, 'best', '--stdout']);
-    stream.stdout.pipe(res);
+    stream = spawn(config.streamlinkpath + "streamlink", [url, 'best', '-l', 'error', '--stdout']);
+
+    if (showErrorInStream == false) {
+        stream.stdout.pipe(res);
+    }
+    //stream.stdout.pipe(tunnel);
+    //res.send("tunnel criado");
 
     stream.stderr.pipe(process.stderr);
 
@@ -126,35 +143,39 @@ app.get('/videostream/streamlink', (req, res) => {
     })
 
     stream.stdout.on('data', (data) => {
-        /*
-                if (databuf.header.length < databufheaderlen) {
-
-                    databuf.header.push({ bytes: data });
-                } else {
-
-                    //console.log("linhas atuais: " + databuf.data.length);
-                    //console.log("databuf atual: " + databuf.toString);
-                    databuf.data = data;
-                    //console.log("databuf shifted: " + databuf.data.shift());
-                    // console.log("databuf not shifted: " + databuf.data);
-                    //console.log("databuf depois: " + databuf);
-
-                    //databuf.data.push({ bytes: data });
-
-                }
-        */
-
-
-        //bufcount++;
-        //console.log("databuf header length: " + databuf.header.length);
-        //console.log("databuf data length: " + databuf.data.length);
+        if (streamstart == false && showErrorInStream == true) {
+            stream.stdout.pipe(res);
+            streamstart = true;
+        }
         setDataSize(stream.pid, data);
+        //tunnel.write(data);
 
     })
 
     stream.stderr.on('data', (data) => {
+        var stderrmsg = data.toString()
+        var msgtodisplay = "";
+
+        var msgsplit = stderrmsg.split('\r\n');
         debug.lastConsoleData.stdErr = data.toString();
+
         log(data.toString());
+        var haserror = stderrmsg.indexOf("error");
+        console.log("has error: " + haserror);
+        if (showErrorInStream == true && haserror > -1) {
+            if (msgsplit.length > 0) {
+                // var msgtodisplay = msgsplit[1].substring(7, 30)
+            } else {
+                // var msgtodisplay = msgsplit[0].substring(7, 30)
+            }
+
+            //msgtodisplay = msgtodisplay.replace(/'/g, "");
+            //streamerror = displayErrorInStream(msgtodisplay);
+            streamerror = displayErrorInStream("error");
+            streamerrorpid = streamerror.pid;
+            log("start ffmpeg for message error in PID: " + streamerror.pid);
+            streamerror.stdout.pipe(res);
+        }
     })
 
     stream.stdin.on('data', (data) => {
@@ -203,6 +224,12 @@ app.get('/videostream/streamlink', (req, res) => {
         log(`kill PID ${stream.pid} of program streamlink`)
             //stream.kill();
         killProcesses(stream.pid);
+        try {
+            killProcesses(streamerror.pid);
+        } catch (e) {
+            //console.log("error on kill process of ffmpeg display error: " + e.message);
+        }
+
     })
 
 });
@@ -211,6 +238,11 @@ app.get('/videostream/streamlink', (req, res) => {
 
 
 app.get('/videostream/ffmpeg', (req, res) => {
+    var stream = undefined;
+    var streamerror = undefined;
+    var streamstart = false;
+    var showErrorInStream = false;
+    var streamerrorpid = 0;
     if (checkToken(req, res) == false) {
         return false;
     };
@@ -220,17 +252,38 @@ app.get('/videostream/ffmpeg', (req, res) => {
         return false;
     }
 
+    if (config.showErrorInStream == true || req.body.showerrorinstream == true) {
+        showErrorInStream = true;
+    }
+
+
+    //var streamerror = "";
+
     appsetheader(res);
+
+
     url = req.query.url;
     announceStreaming(url);
     url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
     var clientIP = req.ip;
+    var ffmpegparams = [];
+    ffmpegparams = ['-loglevel', 'error', '-i', url, '-vcodec', config.ffmpeg.codec, '-acodec', 'aac', '-b', '15000k', '-strict', '-2', '-mbd', 'rd', '-copyinkf', '-flags', '+ilme+ildct', '-fflags', '+genpts', '-metadata', 'service_provider=' + config.ffmpeg.serviceprovider, '-f', config.ffmpeg.format, '-tune', 'zerolatency', '-'];
+    //ffmpegparams = ['-f', 'lavfi', '-i', 'color=size=1920x1080:rate=25:color=blue', '-vf', '"drawtext=fontfile=/path/to/font.ttf:fontsize=55:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:text=\'Error on videostream\'"', '-c:a', 'copy', '-shortest', '-tune', 'zerolatency', '-f', 'h264', '-']
     debug.remoteIP = req.ip;
     debug.endpoint = req.path;
     log(`opening connect to stream in url ${url} for ffmpeg from ${clientIP}`);
-    const stream = spawn(config.ffmpegpath + 'ffmpeg', ['-loglevel', 'error', '-i', url, '-vcodec', config.ffmpeg.codec, '-acodec', 'aac', '-b', '15000k', '-strict', '-2', '-mbd', 'rd', '-copyinkf', '-flags', '+ilme+ildct', '-fflags', '+genpts', '-metadata', 'service_provider=' + config.ffmpeg.serviceprovider, '-f', config.ffmpeg.format, '-tune', 'zerolatency', '-']);
+    //const stream = spawn(config.ffmpegpath + 'ffmpeg', ['-loglevel', 'error', '-i', url, '-vcodec', config.ffmpeg.codec, '-acodec', 'aac', '-b', '15000k', '-strict', '-2', '-mbd', 'rd', '-copyinkf', '-flags', '+ilme+ildct', '-fflags', '+genpts', '-metadata', 'service_provider=' + config.ffmpeg.serviceprovider, '-f', config.ffmpeg.format, '-tune', 'zerolatency', '-']);
 
-    stream.stdout.pipe(res);
+
+    stream = spawn(config.ffmpegpath + 'ffmpeg', ffmpegparams);
+
+
+
+    if (showErrorInStream == false) {
+        stream.stdout.pipe(res);
+    }
+
+
     stream.stderr.pipe(process.stderr);
     var spawncommand = stream.spawnargs;
     stream.on('spawn', () => { // on app initialization
@@ -253,6 +306,10 @@ app.get('/videostream/ffmpeg', (req, res) => {
     })
 
     stream.stdout.on('data', (data) => {
+        if (streamstart == false && showErrorInStream == true) {
+            stream.stdout.pipe(res);
+            streamstart = true;
+        }
 
         setDataSize(stream.pid, data);
     })
@@ -303,7 +360,18 @@ app.get('/videostream/ffmpeg', (req, res) => {
 
     stream.stderr.on('data', (data) => {
         debug.lastConsoleData.stdErr = data.toString();
+        //streamerror = data.toString();
         log(data.toString());
+
+        if (showErrorInStream == true) {
+            streamerror = displayErrorInStream(data.toString());
+            streamerrorpid = streamerror.pid;
+            log("start ffmpeg for message error in PID: " + streamerror.pid);
+            streamerror.stdout.pipe(res);
+        }
+
+
+
     })
 
     stream.stdin.on('data', (data) => {
@@ -319,8 +387,10 @@ app.get('/videostream/ffmpeg', (req, res) => {
         log(`closed connection of url ${url}`);
         log(`kill PID ${stream.pid} of program ffmpeg`)
         killProcesses(stream.pid);
+        if (streamerrorpid != 0) {
+            killProcesses(streamerrorpid)
+        }
     })
-
 
 });
 
@@ -383,6 +453,7 @@ app.get('/api/checkstream', (req, res) => {
     url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
 
     var commandffmpeg = config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i \"" + url + "\" -vframes 1 -q:v 2 -f null -";
+
     var status = "";
     var erro = "";
 
@@ -444,9 +515,12 @@ app.get('/info', (req, res) => {
 
         };
     */
-    var timestamp = new Date().getTime();
-    res.send("timestamp: " + timestamp);
+    //var timestamp = new Date().getTime();
+    res.setHeader('Content-Type', 'application/json');
+    res.send(info);
 });
+
+
 
 app.get('/api/log', (req, res) => {
     var auth = basicAuth(req, res);
@@ -651,14 +725,15 @@ app.get('/stopserver', (req, res) => {
     process.exit(0);
 });
 
-/*
+
 app.get('/teste', (req, res) => {
     //res.status(900).send(JSON.stringify(processes));
-    while (actualstream != null) {
-        res.send(actualstream);
-    }
+    //while (actualstream != null) {
+    //    res.send(actualstream);
+    //}
+    tunnel.pipe(res);
 });
-*/
+
 
 app.get('/status', (req, res) => {
 
@@ -1620,9 +1695,20 @@ var server = app.listen(config.port);
 
 
 
-/* Functions */
+
+
+
+
+
+
+/********************************************************************************************************************************/
+/*                                       F U N C T I O N S                                                                      */
+/*******************************************************************************************************************************/
+
+
 // Load configuration
 function loadconfig() {
+    config = {};
     try {
         const fs = require("fs");
         const jsonString = fs.readFileSync("./streamproxy.config.json");
@@ -1632,7 +1718,7 @@ function loadconfig() {
 
         //console.log("error on loading configfile: " + err)
 
-        config = { port: 4211, logConsole: true, logWeb: false, stramlinkpath: "", ffmpegpath: "", ffmpeg: { codec: "mpeg2video", format: "mpegts", serviceprovider: "streamproxy" } };
+        config = { port: 4211, logConsole: true, logWeb: false, showErrorInStream: false, streamlinkpath: "", ffmpegpath: "", ffmpeg: { codec: "mpeg2video", format: "mpegts", serviceprovider: "streamproxy" } };
 
 
         const fswrite = require("fs");
@@ -1672,6 +1758,10 @@ function loadconfig() {
 
     if (config.logWeb == undefined) {
         config.logWeb = false;
+    }
+
+    if (config.showErrorInStream == undefined) {
+        config.showErrorInStream = false;
     }
 
     //if (config.ffmpeg.servicename == undefined) {
@@ -2082,4 +2172,96 @@ function log(logtext) {
         logdata.push(logtext);
     }
 
+}
+
+function ffmpegDisplayText(text) {
+    var ffmpegcomm = "";
+    var textlen = text.length;
+    var fontsize = 0;
+    if (textlen < 15) {
+        fontsize = 55;
+    } else {
+        fontsize = 130 - textlen;
+    }
+    if (fontsize < 5) {
+        fontsize = 25;
+    }
+    ffmpegcomm = `${config.ffmpegpath}ffmpeg -loglevel fatal -f lavfi -i color=size=1920x1080:rate=25:color=blue  -vf "drawtext=fontfile=/c/windows/fonts/times.ttf:fontsize=${fontsize}:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:text='${text}'" -c:a copy -shortest -tune zerolatency -f h264 -`;
+    //console.log("ffmpeg command for errordisplay: " + ffmpegcomm);
+    if (os.platform() == 'win32') {
+        return spawn(ffmpegcomm, { shell: 'powershell.exe' });
+    } else {
+        return spawn(ffmpegcomm, { shell: true });
+    }
+}
+
+function displayErrorInStream(errortext) {
+    var texttodisplay = errortext;
+    var separatedtext = errortext.split("\r\n");
+
+    //return ffmpegDisplayText(separatedtext[0]);
+    ffmpegcomm = `${config.ffmpegpath}ffmpeg -loglevel error -loop 1 -f image2 -i ./resources/nosignal.jpg -c:v libx264 -t 50 -f h264 -`;
+    console.log("ffmpeg command for errordisplay: " + ffmpegcomm);
+    if (os.platform() == 'win32') {
+        return spawn(ffmpegcomm, { shell: 'powershell.exe' });
+    } else {
+        return spawn(ffmpegcomm, { shell: true });
+    }
+    //texttodisplay = texttodisplay.replace(/\r/g, " ");
+    //texttodisplay = texttodisplay.substring(0, 166)
+
+}
+
+function getInfo() {
+    var theosplatform = os.platform();
+    var commandffmpeg = config.ffmpegpath + "ffmpeg -version";
+    var commandstreamlink = config.streamlinkpath + "streamlink --version";
+    var onlyversion = "";
+    var regex = /ffmpeg version (\d+\.\d+\.\d+)/
+    var returncommand = require('child_process').execSync(commandffmpeg);
+    var ffmpegversion = "";
+    var streamlinkversion = "";
+
+    onlyversion = regex.exec(returncommand);
+    if (onlyversion.length > 0) {
+        ffmpegversion = onlyversion[1];
+    } else {
+        ffmpegversion = onlyversion[0];
+    }
+
+    regex = /streamlink (\d+\.\d+\.\d+)/
+    returncommand = require('child_process').execSync(commandstreamlink);
+    onlyversion = regex.exec(returncommand);
+    if (onlyversion.length > 0) {
+        streamlinkversion = onlyversion[1];
+    } else {
+        streamlinkversion = onlyversion[0];
+    }
+
+    info = { pid: process.pid, platform: theosplatform, arch: os.arch(), freemem: os.freemem(), totalmem: os.totalmem(), ostype: os.type(), versions: { ffmpeg: ffmpegversion, streamlink: streamlinkversion, os: os.version() } }
+
+}
+
+function checkVersion(a, b) {
+    let x = a.split('.').map(e => parseInt(e));
+    let y = b.split('.').map(e => parseInt(e));
+    let z = "";
+
+    for (i = 0; i < x.length; i++) {
+        if (x[i] === y[i]) {
+            z += "e";
+        } else
+        if (x[i] > y[i]) {
+            z += "m";
+        } else {
+            z += "l";
+        }
+    }
+    if (!z.match(/[l|m]/g)) {
+        return 0;
+    } else if (z.split('e').join('')[0] == "m") {
+        return 1;
+    } else {
+        return -1;
+    }
 }
