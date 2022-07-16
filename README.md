@@ -22,6 +22,12 @@
 <li>http://&lt;serverip&gt;:&lt;port&gt;/videostream/streamlink?url=&lt;livestreamurl&gt;
 <ul>
 <li>Livestream will be routed from a live stream url to any url that is streamlink compatible, video and audio codecs will be passthruded</li>
+<li>query parameters:
+<ul>
+<li>url =&gt; the url of livestream</li>
+<li>streamserver =&gt; create a streamserver (&amp;streamserver=&lt;name&gt;), you can use the url <a href="http://&lt;serverip&gt;:&lt;port&gt;/streamserver/create">http://&lt;serverip&gt;:&lt;port&gt;/streamserver/create</a> to create using wizard</li>
+</ul>
+</li>
 <li>Ex: http://localhost:3000//videostream/streamlink?url=https://www.youtube.com/c/SkyNews/live<br />To display the skynews live stream on your iptv app</li>
 </ul>
 </li>
@@ -34,6 +40,18 @@
 <li style="list-style-type: none;">
 <ul>
 <li>The livestream will be routed and transcoded to MPEG-2 TS format from a live stream url of any url that ffmpeg supports.</li>
+<li>Query parameters:
+<ul>
+<li>url =&gt; the url of livestream</li>
+<li>streamserver (optional)=&gt; create a streamserver (&amp;streamserver=&lt;name&gt;), you can use the url <a href="http://&lt;serverip&gt;:&lt;port&gt;/streamserver/create">http://&lt;serverip&gt;:&lt;port&gt;/streamserver/create</a> to create using wizard</li>
+<li>videoformat (optional) =&gt; the format for output livestream, if ommited, use in config, if doesn't have in config file, use default mpegts</li>
+<li>videocodec (optional) =&gt; the videocodec for output livestream, if ommited use in config, if doesn't have in config file, use default mpeg2</li>
+<li>framesize (optional) =&gt; the framesize for output livestream, if ommited use of input livestream</li>
+<li>framerate (optional) =&gt; the framerate of output livestream, if ommited use of input livestream</li>
+<li>serviceprovider (optional) =&gt; the service provider of output livestream, if ommited use in config, if doesn't have in config file, use default streamproxy</li>
+<li>streamdescription (optional) =&gt; the stream description (use for service name), if ommited use default streamproxyservice</li>
+</ul>
+</li>
 <li>Ex: http://localhost:3000/videostream/ffmpeg?url=https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8<br />To display the live stream of Redbull TV in MPEG2 TS format on your iptv app</li>
 </ul>
 </li>
@@ -44,25 +62,52 @@
 <li>http://&lt;serverip&gt;:&lt;port&gt;/audiostream/play?url=&lt;livestreamurl&gt;
 <ul>
 <li>convert video livestream to audiolivestream (mp3 format), now you can listen youtube channels</li>
+<li>Query parameters:
+<ul>
+<li>url =&gt; the url of livestream</li>
+<li>streamserver (optional)=&gt; create a streamserver (&amp;streamserver=&lt;name&gt;), you can use the url <a href="http://&lt;serverip&gt;:&lt;port&gt;/streamserver/create">http://&lt;serverip&gt;:&lt;port&gt;/streamserver/create</a> to create using wizard</li>
+<li>runner (optional) =&gt; what runner will be used: streamlink or ffmpeg, if ommited the streamproxy choose the best runner</li>
+<li>title (optional) =&gt; the title of audio livestream, if ommited, use default '
+<div>
+<div>streamproxy audio'</div>
+</div>
+</li>
+</ul>
+</li>
 <li>Ex: http://localhost:3000/videostream/info?url=https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8<br />convert the TV RED BULL to a streaming radio station. NOTE: In windows platforms is only possible to convert videostrem to audiostream from ffmpeg (streamlink is not possible)</li>
 </ul>
 </li>
 <li>http://&lt;serverip&gt;:&lt;port&gt;/videostream/play?url=&lt;livestreamurl&gt;
 <ul>
 <li>Convert a streamlink's stream to MPEG-2 TS</li>
+<li>Query parameters:
+<ul>
+<li>url =&gt; the url of livestream</li>
+<li>streamserver (optional)=&gt; create a streamserver (&amp;streamserver=&lt;name&gt;), you can use the url http://&lt;serverip&gt;:&lt;port&gt;/streamserver/create to create using wizard</li>
+<li>videoformat (optional) =&gt; the format for output livestream, if ommited, use in config, if doesn't have in config file, use default mpegts</li>
+<li>videocodec (optional) =&gt; the videocodec for output livestream, if ommited use in config, if doesn't have in config file, use default mpeg2</li>
+<li>framesize (optional) =&gt; the framesize for output livestream, if ommited use of input livestream</li>
+<li>framerate (optional) =&gt; the framerate of output livestream, if ommited use of input livestream</li>
+<li>serviceprovider (optional) =&gt; the service provider of output livestream, if ommited use in config, if doesn't have in config file, use default streamproxy</li>
+<li>streamdescription (optional) =&gt; the stream description (use for service name), if ommited use default streamproxyservice</li>
+</ul>
+</li>
 <li>Ex: http://localhost:3000//videostream/streamlink?url=https://www.youtube.com/c/SkyNews/live<br />To display the skynews live stream on your iptv app (in MPEG-2 TS format)</li>
 <li><strong>Note: due to compatibility issues, this endpoint cannot run if the server is installed on windows</strong></li>
 </ul>
 </li>
-<li>http://&lt;serverip&gt;:&lt;port&gt;/streamserver/create?url=&lt;livestreamurl&gt;&amp;port=&lt;serverport&gt;
+<li>http://&lt;serverip&gt;:&lt;port&gt;/streamserver/create
 <ul>
-<li>creates a livestream server for the video that is in the url, the &lt;serverport&gt; parameter is optional and will determine which port the server will be created on. With this server you can make a livestream available in a single thread and it will be served to several users (just access the server url). This endpoint must be called from a browser. To close this server session, just kill the corresponding process in the status page (/status)</li>
-<li><strong>note that for now only streams compatible with the streamlink will be accepted. ffmpeg compatible streams will be added in a future release</strong></li>
-<li><strong>This endpoint is in beta version</strong></li>
-<li>Ex: http://localhost:3000/streamserver/create?url=https://www.youtube.com/c/SkyNews/live&amp;port=4212, to server skynews livestream from youtube in <a href="http://localhost:4212">http://localhost:4212</a> (to play the stream run, for exemple, ffplay <a href="http://localhost:4211">http://localhost:4211</a>)</li>
+<li>streamserver is a livestream server that allows with just one thread created and using the same streamproxy port you can provide the livestream to several clients, just access http://&lt;serverip&gt;:&lt;port&gt;/play/&lt;servername&gt;, where &lt; servername&gt; is the server name given at creation time. To close this server session, just kill the corresponding process in the status page (/status).&nbsp;<strong>Now compatible with streamlink, ffmpeg and convert videostream to audiolivestream</strong></li>
+<li>&nbsp;</li>
 </ul>
 </li>
-<li>http://&lt;serverip&gt;:&lt;port&gt;/videostream/restream?url=&lt;livestream&gt;&amp;output=&lt;outputaddress&gt;&amp;format=&lt;format&gt;&amp;vcode=&lt;videocoded&gt;&amp;acodec=&lt;audiocodec&gt;
+<li>http://&lt;serverip&gt;:&lt;port&gt;/streamserver/playlist.m3u
+<ul>
+<li>Download all streamservers mounted in m3u playlist format</li>
+</ul>
+</li>
+<li>&nbsp;http://&lt;serverip&gt;:&lt;port&gt;/videostream/restream?url=&lt;livestream&gt;&amp;output=&lt;outputaddress&gt;&amp;format=&lt;format&gt;&amp;vcode=&lt;videocoded&gt;&amp;acodec=&lt;audiocodec&gt;
 <ul>
 <li>Restream a livestream to another address (rtmp for exemple)</li>
 <li>url parameters
@@ -72,7 +117,7 @@
 <li>&lt;format&gt;: the format of livestream (mpeg2-ts, hls, mp3, etc...)</li>
 <li>&lt;videocodec&gt;: the video codec (mp4, mpeg2, h264, etc...), this parameter is optional, if ommited the video codec is copied from source</li>
 <li>&lt;audiocodec&gt;: the audio codec (mp3, aac,&nbsp; etc...), this parameter is optional, if ommited the audio codec is copied from source</li>
-<li><strong>This endpoint is in beta version</strong></li>
+<li><strong>This endpoint is in beta version (will be removed in a future version)</strong></li>
 <li>Ex: http://localhost:3000/videostream/restream?url=https://www.youtube.com/c/SkyNews/live&amp;output=rtmp://localhost:4113/live&amp;format=mpeg2ts&amp;vcode=mpeg2&amp;acodec=mp3 -&gt; restream the skynews youtube channel to rtmp://localhost:4113/live</li>
 <li>This endpoint must be called from browser</li>
 <li>To kill session, kill correspondent process from /status</li>

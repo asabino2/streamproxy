@@ -6,14 +6,18 @@
 const { spawn } = require('child_process');
 const express = require('express');
 const os = require('os');
+var useragent = require('express-useragent');
 var config = {};
 var info = { pid: 0, platform: "", arch: "", freemem: 0, totalmem: 0, ostype: "", versions: { ffmpeg: "", streamlink: "", os: "" } }
 var processes = [];
 var databuf = { header: [{ bytes: [] }], data: undefined };
 var databufheaderlen = 4;
 var mydatabuf = undefined;
+var streamserverstatus = [];
 const { PassThrough } = require("stream").Duplex;
-const tunnel = new PassThrough();
+//var arrstreamserver = [{ PID: 0, streamname: "", tunnel: undefined }]
+var arrstreamserver = []
+    //const tunnel = new PassThrough();
 
 var debug = { PID: 0, url: "", endpoint: "", remoteIP: "", app: "", command: "", statusExec: "", lastEvent: "", exitCode: "", exitSignal: "", message: "", lastError: "", lastConsoleData: { stdErr: "", stdin: "" } };
 
@@ -39,6 +43,7 @@ var publicip = "44";
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(bodyParser.raw());
+app.use(useragent.express());
 
 var pjson = require('../package.json');
 //console.log(pjson.version);
@@ -66,171 +71,11 @@ console.log("");
 
 // Service for streamlink stream proxy
 app.get('/videostream/streamlink', (req, res) => {
-    var bufcount = 0;
-    var stream = undefined;
-    var streamerror = undefined;
-    var streamstart = false;
-    var showErrorInStream = false;
-    var streamerrorpid = 0;
-    if (checkToken(req, res) == false) {
-        return false;
-    };
 
-    var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
-        return false;
-    }
-
-    if (config.showErrorInStream == true || req.query.showerrorinstream == 'true') {
-        showErrorInStream = true;
-        log("Show error in stream is enabled");
-    }
-
-    appsetheader(res);
-    var clientIP = req.ip;
     url = req.query.url;
-    announceStreaming(url);
-    debug.remoteIP = req.ip;
-    debug.endpoint = req.path;
-    url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
-    log(`opening connect to stream in url ${url} from ${clientIP}`);
 
-    stream = spawn(config.streamlinkpath + "streamlink", [url, 'best', '-l', 'error', '--stdout']);
+    runStream(req, res, spawn(config.streamlinkpath + "streamlink", [url, 'best', '-l', 'error', '--stdout']), "streamlink")
 
-    if (showErrorInStream == false) {
-        stream.stdout.pipe(res);
-    }
-    //stream.stdout.pipe(tunnel);
-    //res.send("tunnel criado");
-
-    stream.stderr.pipe(process.stderr);
-
-    var spawncommand = stream.spawnargs;
-    stream.on('spawn', () => { // on app initialization
-
-        databuf = { header: [], data: undefined };
-        //console.log("to string " + spawncommand.toString());
-        spawncommand = spawncommand.toString();
-        spawncommand = spawncommand.replace(/,/g, ' ');
-        addprocess(req, stream, auth.user, 0)
-        log(`running streamlink app (PID ${stream.pid}) [${spawncommand}]`);
-        debug.PID = stream.pid;
-        debug.app = "streamlink";
-        debug.url = url;
-        debug.command = spawncommand;
-        debug.lastEvent = "spawn";
-        debug.exitCode = "";
-        debug.exitSignal = "";
-        debug.message = "On Spawn command";
-        debug.statusExec = "Running";
-
-
-    })
-    stream.on('close', (code, signal) => { // on app closed
-        log(`close stop of PID ${stream.pid}, code ${code}, signal ${signal}`);
-        removeprocess(stream.pid);
-        debug.PID = stream.pid;
-        debug.app = "streamlink";
-        debug.url = url;
-        debug.command = spawncommand;
-        debug.lastEvent = "close";
-        debug.exitCode = code;
-        debug.exitSignal = signal;
-        debug.message = "On close";
-        debug.statusExec = "closed";
-
-
-    })
-
-    stream.stdout.on('data', (data) => {
-        if (streamstart == false && showErrorInStream == true) {
-            stream.stdout.pipe(res);
-            streamstart = true;
-        }
-        setDataSize(stream.pid, data);
-        //tunnel.write(data);
-
-    })
-
-    stream.stderr.on('data', (data) => {
-        var stderrmsg = data.toString()
-        var msgtodisplay = "";
-
-        var msgsplit = stderrmsg.split('\r\n');
-        debug.lastConsoleData.stdErr = data.toString();
-
-        log(data.toString());
-        var haserror = stderrmsg.indexOf("error");
-        console.log("has error: " + haserror);
-        if (showErrorInStream == true && haserror > -1) {
-            if (msgsplit.length > 0) {
-                // var msgtodisplay = msgsplit[1].substring(7, 30)
-            } else {
-                // var msgtodisplay = msgsplit[0].substring(7, 30)
-            }
-
-            //msgtodisplay = msgtodisplay.replace(/'/g, "");
-            //streamerror = displayErrorInStream(msgtodisplay);
-            streamerror = displayErrorInStream("error");
-            streamerrorpid = streamerror.pid;
-            log("start ffmpeg for message error in PID: " + streamerror.pid);
-            streamerror.stdout.pipe(res);
-        }
-    })
-
-    stream.stdin.on('data', (data) => {
-        debug.lastConsoleData.stdin = data.toString();
-    })
-
-    stream.on('exit', (code, signal) => {
-
-        removeprocess(stream.pid);
-        debug.PID = stream.pid;
-        debug.app = "streamlink";
-        debug.url = url;
-        debug.command = spawncommand;
-        debug.lastEvent = "exit";
-        debug.exitCode = code;
-        debug.exitSignal = signal;
-        debug.message = "On exit";
-        debug.statusExec = "closed";
-
-    })
-
-    stream.on('error', (err) => { // on error on app
-        removeprocess(stream.pid);
-        log(`error ocurred: ${err}`);
-        debug.PID = stream.pid;
-        debug.app = "streamlink";
-        debug.url = url;
-        debug.command = spawncommand;
-        debug.lastEvent = "error";
-        debug.exitCode = "";
-        debug.exitSignal = "";
-        debug.message = err;
-        debug.statusExec = "closed with error";
-        debug.lastError = err;
-        res.status(500).send("<h2>Error on calling streamlink app</h2><br>" + err)
-
-
-    })
-
-    stream.on('message', (message, sendHandle) => { // on message
-        log(`message: ${message}`);
-    })
-
-    req.on('close', () => { // on connection close, kill PID of app
-        log(`closed connection of url ${url}`);
-        log(`kill PID ${stream.pid} of program streamlink`)
-            //stream.kill();
-        killProcesses(stream.pid);
-        try {
-            killProcesses(streamerror.pid);
-        } catch (e) {
-            //console.log("error on kill process of ffmpeg display error: " + e.message);
-        }
-
-    })
 
 });
 
@@ -243,6 +88,1000 @@ app.get('/videostream/ffmpeg', (req, res) => {
     var streamstart = false;
     var showErrorInStream = false;
     var streamerrorpid = 0;
+    var url = req.query.url;
+    var vcodec = undefined;
+    var acodec = undefined;
+    var vformat = undefined;
+    var framesize = undefined;
+    var framerate = undefined;
+    var service_provider = undefined;
+    var service_name = undefined;
+
+    if (req.query.videocodec != undefined) {
+        vcodec = encodeURI(req.query.videocodec);
+    } else if (config.ffmpeg.codec != undefined) {
+        vcodec = config.ffmpeg.codec;
+    } else {
+        vcodec = "mpeg2video";
+    }
+
+    if (req.query.audiocodec != undefined) {
+        acodec = encodeURI(req.query.audiocodec);
+    } else if (config.ffmpeg.acodec != undefined) {
+        acodec = config.ffmpeg.acodec;
+    } else {
+        acodec = "aac";
+    }
+
+    if (req.query.serviceprovider != undefined) {
+        service_provider = encodeURI(req.query.serviceprovider);
+    } else if (config.ffmpeg.serviceprovider != undefined) {
+        service_provider = config.ffmpeg.serviceprovider;
+    } else {
+        service_provider = "streamproxy";
+    }
+
+    if (req.query.videoformat != undefined) {
+        vformat = encodeURI(req.query.videoformat);
+    } else if (config.ffmpeg.format != undefined) {
+        vformat = config.ffmpeg.format;
+    } else {
+        vformat = "mpegts";
+    }
+
+    if (req.query.streamdescription != undefined) {
+        service_name = encodeURI(req.query.streamdescription);
+    } else {
+        service_name = "streamproxyservice";
+    }
+
+    if (req.query.framesize != undefined) {
+        framesize = encodeURI(req.query.framesize);
+    }
+
+    if (req.query.framerate != undefined) {
+        framerate = encodeURI(req.query.framerate);
+    }
+
+    var ffmpegparams = [];
+    ffmpegparams.push('-loglevel');
+    ffmpegparams.push('error');
+    ffmpegparams.push('-i');
+    ffmpegparams.push(url);
+    if (vcodec != undefined) {
+        ffmpegparams.push('-vcodec');
+        ffmpegparams.push(vcodec);
+    }
+
+    if (acodec != undefined) {
+        ffmpegparams.push('-acodec');
+        ffmpegparams.push(acodec);
+    }
+
+    if (framesize != undefined) {
+        ffmpegparams.push('-s');
+        ffmpegparams.push(framesize);
+    }
+
+    if (framerate != undefined) {
+        ffmpegparams.push('-r');
+        ffmpegparams.push(framerate);
+    }
+
+
+    ffmpegparams.push('-b');
+    ffmpegparams.push('15000k');
+    ffmpegparams.push('-strict');
+    ffmpegparams.push('-2');
+    ffmpegparams.push('-mbd');
+    ffmpegparams.push('rd');
+    ffmpegparams.push('-copyinkf');
+    ffmpegparams.push('-flags');
+    ffmpegparams.push('+ilme+ildct');
+    ffmpegparams.push('-fflags');
+    ffmpegparams.push('+genpts');
+    //ffmpegparams.push('-filter:v');
+    //ffmpegparams.push('fps=60');
+    if (service_provider != undefined) {
+        ffmpegparams.push('-metadata');
+        ffmpegparams.push('service_provider="' + service_provider + '"');
+        //ffmpegparams.push(service_provider);
+    }
+    if (service_provider != undefined) {
+        ffmpegparams.push('-metadata');
+        ffmpegparams.push('service_name="' + service_name + '"');
+        //ffmpegparams.push(service_name);
+    }
+    if (vformat != undefined) {
+        ffmpegparams.push('-f');
+        ffmpegparams.push(vformat);
+    }
+    ffmpegparams.push('-tune');
+    ffmpegparams.push('zerolatency');
+    ffmpegparams.push('-');
+
+    //ffmpegparams = ['-loglevel', 'error', '-i', url, '-vcodec', vcodec, '-acodec', acodec, '-b', '15000k', '-strict', '-2', '-mbd', 'rd', '-copyinkf', '-flags', '+ilme+ildct', '-fflags', '+genpts', '-metadata', 'service_provider=' + service_provider, '-metadata', 'service_name=' + service_name, '-f', config.ffmpeg.format, '-tune', 'zerolatency', '-'];
+
+    runStream(req, res, spawn(config.ffmpegpath + 'ffmpeg', ffmpegparams), "ffmpeg");
+
+
+});
+
+//convert to audio
+app.get('/audiostream/play', (req, res) => {
+    var PIDOffset = 0;
+    var command = "";
+    var url = req.query.url;
+    /*   
+       if (checkToken(req, res) == false) {
+           return false;
+       };
+
+       var auth = basicAuth(req, res);
+       if (auth.authenticated == false) {
+           return false;
+       }
+
+       appsetheader(res);
+
+       
+       announceStreaming(url);
+       url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
+    */
+    var runner = req.query.runner;
+    log("*** Convert videostream to audiostream")
+    log("you selected the runner " + runner)
+    var stream = "";
+    var title = req.query.title;
+
+    var clientIP = req.ip;
+    debug.remoteIP = req.ip;
+    debug.endpoint = req.path;
+    var metadata = "";
+    if (title == undefined) {
+        title = "streamproxy audio";
+    }
+    metadata = `-metadata icy-aim="N/A" -metadata icy-br=128 -metadata icy-genre="misc" -metadata icy-icq="N/A" -metadata icy-irc="N/A" -metadata icy-name="streamproxy" -metadata icy-prebuffer=64000 -metadata icy-pub=1 -metadata StreamTitle="${title}" -metadata title="${title}"`;
+
+    if (runner == undefined) {
+        if (checkIfstreamlinkCanHandle(url) == true) {
+            runner = "streamlink"
+            log("System selected the runner " + runner);
+            PIDOffset = 1;
+        } else {
+            runner = "ffmpeg"
+            log("System selected the runner " + runner);
+            PIDOffset = 0;
+        }
+    }
+
+
+    switch (runner) {
+        case "streamlink":
+            log(`opening connect to stream in url ${url} for audiconverter with streamlink and ffmpeg (from ${clientIP})`);
+            if (os.platform != "win32") {
+                command = config.streamlinkpath + 'streamlink ' + url + ' worst --stdout | ' + config.ffmpegpath + 'ffmpeg  -loglevel error -i pipe:0 -c:v none -c:a libmp3lame -b:a 128k -joint_stereo 0 -y -f mp3 ' + metadata + ' -'
+            } else {
+                command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' -c:v none -c:a libmp3lame -b:a 128k -joint_stereo 0 -y -f mp3 ' + metadata + '  -'
+            }
+
+            break;
+        case "ffmpeg":
+            log(`opening connect to stream in url ${url} for audiconverter with ffmpeg (from ${clientIP})`);
+            command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' -c:v none -c:a libmp3lame -b:a 128k -joint_stereo 0 -y -f mp3 ' + metadata + '  -'
+
+            break;
+        default:
+            log("runner " + runner + " is invalid");
+            res.status(500).send("invalid runner");
+            return false;
+    }
+    if (os.platform == 'win32') {
+        //stream = spawn(command, { shell: 'powershell.exe' });
+        runStream(req, res, spawn(command, { shell: 'powershell.exe' }), runner + "(VideoToAudioConverter)", true)
+    } else {
+        //stream = spawn(command, { shell: true });
+        runStream(req, res, spawn(command, { shell: true }), runner + "(VideoToAudioConverter)", true)
+    }
+
+
+
+
+});
+
+
+
+//videostream play
+app.get('/videostream/play', (req, res) => {
+    var command = "";
+    var url = req.query.url;
+    var clientIP = req.ip;
+    /*
+        if (checkToken(req, res) == false) {
+            return false;
+        };
+
+        var auth = basicAuth(req, res);
+        if (auth.authenticated == false) {
+            return false;
+        }
+
+        appsetheader(res);
+
+        
+        announceStreaming(url);
+        url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
+
+
+
+        var clientIP = req.ip;
+        debug.remoteIP = req.ip;
+        debug.endpoint = req.path;
+        var metadata = "";
+    */
+
+
+    var vcodec = undefined;
+    var acodec = undefined;
+    var vformat = undefined;
+    var framesize = undefined;
+    var framerate = undefined;
+    var service_provider = undefined;
+    var service_name = undefined;
+
+    if (req.query.videocodec != undefined) {
+        vcodec = encodeURI(req.query.videocodec);
+    } else if (config.ffmpeg.codec != undefined) {
+        vcodec = config.ffmpeg.codec;
+    } else {
+        vcodec = "mpeg2video";
+    }
+    vcodec = '-vcodec ' + vcodec;
+
+    if (req.query.audiocodec != undefined) {
+        acodec = encodeURI(req.query.audiocodec);
+    } else if (config.ffmpeg.acodec != undefined) {
+        acodec = config.ffmpeg.acodec;
+    } else {
+        acodec = "aac";
+    }
+
+    acodec = '-acodec ' + acodec;
+
+    if (req.query.serviceprovider != undefined) {
+        service_provider = encodeURI(req.query.serviceprovider);
+    } else if (config.ffmpeg.serviceprovider != undefined) {
+        service_provider = config.ffmpeg.serviceprovider;
+    } else {
+        service_provider = "streamproxy";
+    }
+
+    service_provider = '-metadata service_provider="' + service_provider + '"';
+
+    if (req.query.videoformat != undefined) {
+        vformat = encodeURI(req.query.videoformat);
+    } else if (config.ffmpeg.format != undefined) {
+        vformat = config.ffmpeg.format;
+    } else {
+        vformat = "mpegts";
+    }
+
+    vformat = '-f ' + vformat;
+
+    if (req.query.streamdescription != undefined) {
+        service_name = encodeURI(req.query.streamdescription);
+    } else {
+        service_name = "streamproxyservice";
+    }
+
+    service_name = '-metadata service_name="' + service_name + '"';
+
+    if (req.query.framesize != undefined) {
+        framesize = '-f ' + encodeURI(req.query.framesize);
+    }
+
+    if (req.query.framerate != undefined) {
+        framerate = '-r ' + encodeURI(req.query.framerate);
+    }
+
+    //command = config.streamlinkpath + 'streamlink ' + url + ' best --stdout | ' + config.ffmpegpath + 'ffmpeg -loglevel error -i pipe:0 -vcodec ' + config.ffmpeg.codec + ' -acodec aac -b 15000k -strict -2 -mbd rd -copyinkf -flags +ilme+ildct -fflags +genpts -metadata service_provider="' + config.ffmpeg.serviceprovider + '" -f ' + config.ffmpeg.format + ' -tune zerolatency -'
+    command = config.streamlinkpath + 'streamlink ' + url + ' best --stdout | ' + config.ffmpegpath + 'ffmpeg -loglevel error -i pipe:0 ' + vcodec + ' ' + framesize + ' ' + framerate + ' ' + acodec + ' -b 15000k -strict -2 -mbd rd -copyinkf -flags +ilme+ildct -fflags +genpts ' + service_provider + ' ' + service_name + ' ' + vformat + ' -tune zerolatency -'
+
+    log(`opening connect to stream in url ${url} for audiconverter with streamlink and ffmpeg (from ${clientIP})`);
+    if (os.platform == 'win32') {
+        res.statusMessage = "this endpoint is not compatible with windows, use linux instead"
+        res.status(400).send("this endpoint is not compatible with windows, use linux instead");
+        return false;
+        stream = spawn('"' + command + '"', { shell: 'powershell.exe' });
+    } else {
+        //stream = spawn(command, { shell: true });
+        runStream(req, res, spawn(command, { shell: true }), "streamlink/ffmpeg")
+    }
+
+});
+
+
+app.get('/videostream/displaytext', (req, res) => {
+    //runStream(req, res, ffmpegDisplayText(req.query.text, req.query.bgimage, undefined, undefined, undefined, undefined, undefined), "ffmpeg", true);
+    runStream(req, res, displayErrorInStream("teste"), "ffmpeg", true);
+})
+
+
+app.get('/streamserver/create', (req, res) => {
+    var auth = basicAuth(req, res);
+    var port = req.query.port;
+    var html = "";
+    if (port == undefined) {
+        port = config.port + 1;
+    }
+    if (auth.authenticated == false) {
+        return false;
+    }
+
+    //streamlinkHTTPServer(req, res, auth, port);
+    /*
+    res.send(`<h3>this endpoint is deprecated, to create a stream server, call a videostream or audiostream url in the browser with the streamserver parameter <br>
+             ex: http://${os.hostname}:${config.port}/videostream/streamlink?url =https://cdnlive.shooowit.net/canalextremaduralive/smil:channel1DVR.smil/playlist.m3u8&streamserver=extremadura</h3><br>
+             <h3>to watch the stream created with command above, insert in your IPTV app the url: http://${os.hostname}:${config.port}/streamserverplay/extremadura</h3>`)
+    */
+    html = `
+    <html>
+    <head>
+    <style>
+    
+    
+    
+    .label {
+      position: absolute;
+        /*left: 42%; */
+       
+    }
+    
+    .secondaryinput {
+      position: absolute;
+      /*  left: 42%; */
+       width: 800px;
+       height: 30px;
+       border-radius: 5px;
+       
+       
+    }
+    
+    
+    #main {
+      width: 100%;
+    }
+    
+    #forms {
+      position: relative;
+      top: 30px;
+      width:800px;
+      margin: auto;
+      
+    }
+    
+    
+    
+    #for_ffmpeg {
+      display: none;
+    }
+    
+    #for_audiostream {
+      display: none;
+    }
+    
+    #logdiv {
+        position: relative;
+        border:  1px solid black;
+        width: 1300px;
+        height: 500px;
+        margin: auto;
+        top: 200px;
+      }
+
+    #createserverbutton {
+                   /* transform: translatex(1180px) translatey(352px);*/
+                   /* min-height: 35px; */
+                     position: relative;
+                     width: 186px;
+                     
+                     
+                                 text-decoration: none;
+                                 border: none;
+                                 padding: 12px 40px;
+                                 font-size: 16px;
+                                 background-color: blue;
+                                 color: #fff;
+                                 border-radius: 5px;
+                                 box-shadow: 7px 6px 28px 1px rgba(0, 0, 0, 0.24);
+                                 cursor: pointer;
+                                 outline: none;
+                                 transition: 0.2s all;
+                             }
+                 
+                             #createserverbutton:active {
+                                 transform: scale(0.98);
+                                 
+                                 box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
+                                 
+                             } 
+                             #createserverbutton:disabled {
+                                background-color: gray;
+                             }  
+                             
+    </style>
+    <script>
+      function createserver(){
+       
+        var streamname = document.getElementById("streamname").value;
+        var streammethod = document.getElementById("streammethod").value;
+        var streamdescription = document.getElementById("streamdescription").value;
+        var url = document.getElementById("url").value;
+        var service_provider = document.getElementById("ffmpeg_providerdiv").value;
+        var videoformat = document.getElementById("ffmpeg_videoformat").value;
+        var videocodec = document.getElementById("ffmpeg_videocodec").value;
+        var audiocodec = document.getElementById("ffmpeg_audiocodec").value;
+        var framesize = document.getElementById("ffmpeg_framesize").value;
+        var framerate = document.getElementById("ffmpeg_framerate").value;
+        var channelnumber = document.getElementById("channelnumber").value;
+        var title = document.getElementById("audiostream_title").value;
+        var hasError = false;
+    
+        document.getElementById("streamname").style.borderColor = "black";
+          document.getElementById("streamdescription").style.borderColor = "black";
+          document.getElementById("url").style.borderColor = "black";
+          document.getElementById("channelnumber").style.borderColor = "black";
+    
+        if(streamdescription == ""){
+          streamdescription = streamname;
+        }
+    
+        if(checkForSpecialCharacter(streamdescription) == true){
+          alert("don't use special character in service description");
+          document.getElementById("streamdescription").style.borderColor = "red"
+          return false;
+        }
+    
+        if(checkForSpecialCharacter(streamname) == true){
+          alert("don't use special character in service name");
+          document.getElementById("streamname").style.borderColor = "red"
+          return false;
+        }
+    
+        if(onlyNumbers(channelnumber) == false && channelnumber != ""){
+          alert('in channel number field, use only numbers');
+          document.getElementById("channelnumber").style.borderColor = "red";
+          return false;
+        }
+    
+        var url = document.getElementById("url").value;
+        var urltocall = "";
+        
+        if(streamname == "" || streamname == undefined){
+          //alert('fill stream name field');
+          document.getElementById("streamname").style.borderColor = "red"
+          hasError = true;
+        } else {
+        
+          streamname = "&streamserver="+streamname
+        }
+    
+        if(videoformat == "" || videoformat == undefined){
+          videoformat = "" ;
+        } else {
+          videoformat = "&videoformat="+videoformat ;
+        }
+
+        if(framesize == "" || framesize == undefined){
+            framesize = "" ;
+          } else {
+            framesize = "&framesize="+framesize ;
+          }
+          
+          if(framerate == "" || framerate == undefined){
+            framerate = "" ;
+          } else {
+            framerate = "&framerate="+framerate ;
+          }
+          
+        if(streamdescription == "" || streamdescription == undefined){
+          streamdescription = "" ;
+        } else {
+          streamdescription = "&streamdescription="+streamdescription ;
+        }
+    
+        if(service_provider == "" || service_provider == undefined){
+          service_provider = "" ;
+        } else {
+          service_provider = "&serviceprovider="+service_provider ;
+        }
+    
+        if(channelnumber == "" || channelnumber == undefined){
+          channelnumber = "" ;
+          
+        } else {
+          channelnumber = "&chnumber="+channelnumber ;
+        }
+    
+        if(videocodec == "" || videocodec == undefined){
+          videocodec = "" ;
+          
+        } else {
+          videocodec = "&videocodec="+videocodec ;
+        }
+    
+        if(audiocodec == "" || audiocodec == undefined){
+          audiocodec = "" ;
+        } else {
+          audiocodec = "&audiocodec="+audiocodec ;
+        }
+    
+        if(title == "" || title == undefined){
+          title = "" ;
+        } else {
+          title = "&title="+title ;
+        }
+    
+        if(url == "" || url == undefined){
+          //alert('fill stream name field');
+          document.getElementById("url").style.borderColor = "red"
+          hasError = true;
+        }
+    
+        if(hasError == true){
+          alert('fill all required fields in red');
+          return false;
+        } 
+    
+    
+       if(streammethod != "/videostream/ffmpeg" && streammethod != "/videostream/play"){
+        videoformat = "";
+        service_provider = "";
+        
+        videocodec = "";
+        audiocodec = "";
+       }
+    
+       if(streammethod != "/videostream/ffmpeg" && streammethod != "/videostream/play" && streammethod != "/videostream/streamlink"){
+        channelnumber = "";
+    }
+
+       if(streammethod != "/audiostream/play"){
+         title = "";
+       } 
+    
+    
+       
+        urltocall = streammethod+"?url="+url+streamname+videoformat+streamdescription+service_provider+channelnumber+videocodec+framesize+framerate+audiocodec+title
+       
+        //alert("teste")
+       //window.location.href = urltocall;
+       document.getElementById("logdiv").innerHTML = "processing....";
+       document.getElementById("createserverbutton").disabled = true;
+       let xhr = new XMLHttpRequest();
+xhr.open('GET', urltocall);
+xhr.send();
+                xhr.onload = function() {
+                    let responseObj = xhr.response;
+                      
+                        logdiv = responseObj;
+                        document.getElementById("logdiv").innerHTML = responseObj;
+                        document.getElementById("createserverbutton").disabled = false;
+                        
+                        
+                   
+                  };
+                  xhr.onerror = function(e) {
+                   console.log("error", e);
+                };
+        
+        //location.replace(urltocall)
+        
+      }
+      function enabledisablefields(){
+        var streammethod = document.getElementById("streammethod").value;
+        
+        if(streammethod == "/videostream/ffmpeg"){
+          document.getElementById("for_ffmpeg").style.display = 'block';
+        } else {
+          document.getElementById("for_ffmpeg").style.display = 'none';
+        }
+    
+        if(streammethod != '/audiostream/play'){
+          document.getElementById("for_videostream").style.display = 'block';
+          document.getElementById("for_audiostream").style.display = 'none';
+        } else {
+          document.getElementById("for_videostream").style.display = 'none';
+          document.getElementById("for_audiostream").style.display = 'block';
+        }
+    
+      
+      }
+    
+      function checkForSpecialCharacter(text){
+      //  const format = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/; // removed because javascript error
+   // return format.test(text);
+        //return false;
+    }
+    
+    function onlyNumbers(str) {
+      return /^[0-9]+$/.test(str);
+    }
+    
+    </script>
+    </head>
+    <body>
+      <div id="main">
+      <center><h1>Create a Stream server</h1></center>
+      <h2><center>use this page to create a streamserver and serve this to n users (one thread will be created)<center></h2>
+       
+      
+       
+        <div id="forms">
+    <!-- streamname -->
+          <div id="streamnamediv" > 
+        <label  for="streamname" class="label" id="teste">Streaming Name:</label><br>
+        <input id="streamname" name="streamname" class="secondaryinput" size="50"/><br /><br /><br />
+      </div>
+    <!-- stream description-->
+        <div id="streamdescriptiondiv" >
+           <label class="label">Stream Description (optional):</label> <br>
+        <input id="streamdescription" name="streamdescription" class="secondaryinput" size="50"/><br /><br /><br />
+      </div>
+    
+     <!-- stream method --> 
+        <div id="streammethoddiv" >
+          <label  class="label">Streaming Method:</label> <br>
+        <select id="streammethod" name="streammethod" class="secondaryinput" onchange = "enabledisablefields()">
+          <option value="/videostream/streamlink">Videostream (streamlink)</option>
+          <option value="/videostream/ffmpeg">Videostream (ffmpeg)</option>`
+
+    if (info.platform != "win32") {
+        html += `<option value="/videostream/play">Videostream (streamlink+ffmpeg)</option>`
+    }
+    html += `<option value="/audiostream/play"
+        >convert videostream to audiostream</option
+      >
+    </select><br /><br />   <br>
+  </div>
+
+  <div id="for_ffmpeg">
+  <!-- FFMPEG:streamprovider-->  
+  <div id="ffmpeg_providerdiv" >
+      <label class="label">Provider (optional):</label> <br>
+   <input id="ffmpeg_provider" name="ffmpeg_provider" class="secondaryinput" size="50"/><br /><br /><br />
+  </div> 
+<!-- FFMPEG:video format-->
+  <div id="ffmpeg_videoformatdiv" >
+      <label class="label">Video Format (optional):</label> <br>
+   <input id="ffmpeg_videoformat" name="ffmpeg_videoformat" class="secondaryinput" size="50"/><br /><br /><br />
+  </div>    
+
+<!-- FFMPEG:vcodec-->
+<div id="ffmpeg_videocodecdiv" >
+    <label class="label">Video Codec (optional):</label> <br>
+ <input id="ffmpeg_videocodec" name="ffmpeg_videocodec" class="secondaryinput" size="50"/><br /><br /><br />
+</div>  
+
+<!-- FFMPEG:framesize-->
+<div id="ffmpeg_framesizediv" >
+    <label class="label">Frame Size:</label> <br>
+    <select id="ffmpeg_framesize" name="ffmpeg_framesize" class="secondaryinput" ">
+    <option value="">Auto (copy from original video)</option>
+    <option value="320x240">320x240</option>
+    <option value="720x480">480p</option>
+    <option value="1280x720">720p (HD)</option>
+    <option value="1920x1080">1080p (fullhd)</option>
+    <option value="2560x1440">QUAD HD</option>
+    <option value="3840x2160">4K</option>
+    <option value="7680x4320">8K</option>
+    <option value="15360x8640">16K</option>
+
+</select><br /><br />   <br>
+</div> 
+
+<!-- FFMPEG:framerate-->
+<div id="ffmpeg_frameratediv" >
+    <label class="label">Framerate:</label> <br>
+    <select id="ffmpeg_framerate" name="ffmpeg_framerate" class="secondaryinput" ">
+    <option value="">Auto (copy from original video)</option>
+    <option value="10">10fps</option>
+    <option value="15">15fps</option>
+    <option value="24">24fps</option>
+    <option value="25">25fps</option>
+    <option value="29.97">29.97fps</option>
+    <option value="30">30fps</option>
+    <option value="59.97">59.97fps</option>
+    <option value="60">60fps</option>
+
+</select><br /><br />   <br>
+</div> 
+
+<!-- FFMPEG:acodec-->
+<div id="ffmpeg_audiocodecdiv" >
+    <label class="label">Audio Codec (optional):</label> <br>
+ <input id="ffmpeg_audiocodec" name="ffmpeg_audiocodec" class="secondaryinput" size="50"/><br /><br /><br />
+</div>
+</div>
+
+<div id="for_videostream">
+<div id="channelnumberdiv">
+    <label class="label">Channel Number (optional):</label> <br>
+ <input id="channelnumber" name="channelnumber" class="secondaryinput" size="50"/><br /><br /><br />
+</div>
+</div>    
+
+<div id="for_audiostream">
+<div id="audiostream_titlediv">
+    <label class="label">Title (optional):</label> <br>
+ <input id="audiostream_title" name="audiostream_title" class="secondaryinput" size="50"/><br /><br /><br />    
+</div>
+</div>
+
+    <!-- url --> 
+   <div id="urldiv"> 
+     <label  class="label">Url:</label><br>
+    <input id="url" name="url" size="50" id="urllabel" placeholder="URL to stream" class="secondaryinput"/><br /><br><br />
+    <center><button onclick="createserver()" id="createserverbutton" >Create Server</button></center>
+  </div>
+
+  </div> 
+  <div id="logdiv">
+  
+    </div>  
+</div> 
+</body>
+</html>`
+    res.send(html);
+
+})
+
+app.get('/streamserver/status', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
+
+    appsetheader(res);
+    var catsize = 'KB';
+    var datasize = 0;
+
+    var data = "";
+    data += `<html>
+            <head> 
+            <style>
+            table {
+            border-collapse: collapse;
+            width: 100%;
+            }
+            th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+            }
+            tr:hover {background-color:#f5f5f5;}
+            th {
+                 background-color: #ddd;
+               }
+
+               /* Start of toast */  
+               #snackbar {
+                 visibility: hidden;
+                 min-width: 250px;
+                 margin-left: -125px;
+                 background-color: #333;
+                 color: #fff;
+                 text-align: center;
+                 border-radius: 2px;
+                 padding: 16px;
+                 position: fixed;
+                 z-index: 1;
+                 left: 50%;
+                 bottom: 30px;
+                 font-size: 17px;
+               }
+               
+               #snackbar.show {
+                 visibility: visible;
+                 -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+                 animation: fadein 0.5s, fadeout 0.5s 2.5s;
+               }
+           
+               /* kill button */
+               #killbutton {
+                text-decoration: none;
+                border: none;
+                padding: 12px 40px;
+                font-size: 16px;
+                background-color: red;
+                color: #fff;
+                border-radius: 5px;
+                box-shadow: 7px 6px 28px 1px rgba(0, 0, 0, 0.24);
+                cursor: pointer;
+                outline: none;
+                transition: 0.2s all;
+            }
+            /* Adding transformation when the button is active */
+              
+            #killbutton:active {
+                transform: scale(0.98);
+                /* Scaling button to 0.98 to its original size */
+                box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
+                /* Lowering the shadow */
+            }
+            /* kill button end */
+               
+               @-webkit-keyframes fadein {
+                 from {bottom: 0; opacity: 0;} 
+                 to {bottom: 30px; opacity: 1;}
+               }
+               
+               @keyframes fadein {
+                 from {bottom: 0; opacity: 0;}
+                 to {bottom: 30px; opacity: 1;}
+               }
+               
+               @-webkit-keyframes fadeout {
+                 from {bottom: 30px; opacity: 1;} 
+                 to {bottom: 0; opacity: 0;}
+               }
+               
+               @keyframes fadeout {
+                 from {bottom: 30px; opacity: 1;}
+                 to {bottom: 0; opacity: 0;}
+               }
+               /* end of toast */                   
+
+            </style>
+            <script>;
+           
+
+             function displayToast(color,text) {
+                var x = document.getElementById("snackbar");
+                x.className = "show";
+                x.innerHTML = text;
+                x.style.backgroundColor = color;
+                setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
+              }
+
+              function getStatusData(){
+                
+                const date = new Date();
+                var datasize = 0;
+                
+                let xhr = new XMLHttpRequest();`
+    if (req.query.streamname !== undefined) {
+        data += `xhr.open('GET', '/api/streamserver/status?streamname=${req.query.streamname}');`
+    } else {
+        data += `xhr.open('GET', '/api/streamserver/status');`
+    }
+
+    data += `xhr.responseType = 'json';
+                xhr.send();
+                xhr.onload = function() {
+                    let responseObj = xhr.response;
+                      
+                        mountStatus(responseObj);
+                        
+                        
+                    
+                   
+                  };
+                  
+
+              
+              }
+
+              function mountStatus(responseObj) {
+                var htmlData = "";
+                htmlData += "<table>";
+                htmlData += "<tr>";
+                htmlData += "<th>UUID</th>";
+                htmlData += "<th>PID</th>";
+                htmlData += "<th>Streamname</th>";
+                htmlData += "<th>user</th>";
+                htmlData += "<th>IP</th>";
+                htmlData += " <th>OS</th>";
+                htmlData += "<th>Browser</th>";
+                htmlData += "<th>User-Agent</th>";
+                
+                htmlData += "</tr>";
+                responseObj.forEach(function(table) {
+                  
+                  
+                  htmlData += '<tr>';
+                  
+                  htmlData += '<td>'+table.UUID+'</td>';
+                  htmlData += '<td>'+table.pid+'</td>';
+                  htmlData += '<td>'+table.streamname+'</td>';
+                  htmlData += '<td>'+table.user+'</td>';
+                  htmlData += '<td>'+table.client.ip+'</td>';
+                  htmlData += '<td>'+table.client.os+'</td>';
+                 
+                      htmlData += '<td>'+table.client.browser+'</td>';
+                  
+                  htmlData += '<td>'+table.client.source+'</td>';
+                  
+                  
+                  htmlData += '</tr>';
+                });
+                htmlData += '</table>';
+                htmlData += '</body>';
+                htmlData += '</html>';
+                document.getElementById("status").innerHTML = htmlData;
+            }
+
+              function startTimer() {
+                getStatusData();
+                setInterval(getStatusData, 1000);  
+            }
+              
+               
+
+            </script>   
+            </head>
+            <body onload="startTimer()">
+            <div id="status"></div>
+            
+            `
+    res.send(data);
+})
+
+app.get('/streamserver/playlist.m3u', (req, res) => {
+    var userpassword = undefined
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
+
+    if (auth.auth != undefined) {
+        userpassword = Buffer.from(auth.auth, 'base64').toString()
+    }
+
+
+
+
+    var playlistdata = "";
+    var channelname = "";
+    var channelnumber = "";
+    var radio = "";
+
+    playlistdata += "#EXTM3U\n";
+    arrstreamserver.forEach(val => {
+            if (val.chnumber != undefined && val.chnumber != "") {
+                channelnumber = `tvg-chno="${val.chnumber}"`;
+            }
+            if (val.serverdescription != undefined && val.serverdescription != "") {
+                channelname = val.serverdescription
+            } else {
+                channelname = val.servername
+            }
+
+            if (val.radio == true) {
+                radio = "radio=true";
+            }
+            playlistdata += `#EXTINF:-1 ${channelnumber} ${radio}, ${channelname}\n`;
+            if (userpassword != undefined && userpassword != "") {
+                playlistdata += `http://${userpassword}@${req.hostname}:${getPortCalled(req)}/play/${val.servename}\n`
+            } else {
+                playlistdata += `http://${req.hostname}:${getPortCalled(req)}/play/${val.servername}\n`
+            }
+        })
+        //res.setHeader('Content-Type', 'application/octet-stream')
+    res.set({ 'Content-Type': 'application/octet-stream' });
+    res.send(playlistdata);
+});
+
+app.get('/videostream/restream', (req, res) => {
+    var PIDOffset = 0;
+    var command = "";
+    var format = req.query.format;
+    var vcodec = "";
+    var acodec = "";
+    var warning = "";
+    if (format == undefined) {
+        format = "flv";
+    }
     if (checkToken(req, res) == false) {
         return false;
     };
@@ -251,40 +1090,92 @@ app.get('/videostream/ffmpeg', (req, res) => {
     if (auth.authenticated == false) {
         return false;
     }
-
-    if (config.showErrorInStream == true || req.body.showerrorinstream == true) {
-        showErrorInStream = true;
+    var output = req.query.output;
+    if (output == undefined) {
+        res.status(400).send("<h1>400 Bad Request - the query parameter output is required</h1>");
+        return false;
     }
 
+    if (req.query.vcodec != undefined) {
+        vcodec = "-c:v " + req.query.vcodec;
+    }
+    if (req.query.acodec != undefined) {
+        acodec = "-c:a " + req.query.acodec;
+    }
 
-    //var streamerror = "";
 
     appsetheader(res);
 
-
     url = req.query.url;
+
     announceStreaming(url);
     url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
+    var runner = req.query.runner;
+    log("*** restream " + url + " to " + output);
+    log("you selected the runner " + runner)
+    var stream = "";
+
+
     var clientIP = req.ip;
-    var ffmpegparams = [];
-    ffmpegparams = ['-loglevel', 'error', '-i', url, '-vcodec', config.ffmpeg.codec, '-acodec', 'aac', '-b', '15000k', '-strict', '-2', '-mbd', 'rd', '-copyinkf', '-flags', '+ilme+ildct', '-fflags', '+genpts', '-metadata', 'service_provider=' + config.ffmpeg.serviceprovider, '-f', config.ffmpeg.format, '-tune', 'zerolatency', '-'];
-    //ffmpegparams = ['-f', 'lavfi', '-i', 'color=size=1920x1080:rate=25:color=blue', '-vf', '"drawtext=fontfile=/path/to/font.ttf:fontsize=55:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:text=\'Error on videostream\'"', '-c:a', 'copy', '-shortest', '-tune', 'zerolatency', '-f', 'h264', '-']
     debug.remoteIP = req.ip;
     debug.endpoint = req.path;
-    log(`opening connect to stream in url ${url} for ffmpeg from ${clientIP}`);
-    //const stream = spawn(config.ffmpegpath + 'ffmpeg', ['-loglevel', 'error', '-i', url, '-vcodec', config.ffmpeg.codec, '-acodec', 'aac', '-b', '15000k', '-strict', '-2', '-mbd', 'rd', '-copyinkf', '-flags', '+ilme+ildct', '-fflags', '+genpts', '-metadata', 'service_provider=' + config.ffmpeg.serviceprovider, '-f', config.ffmpeg.format, '-tune', 'zerolatency', '-']);
-
-
-    stream = spawn(config.ffmpegpath + 'ffmpeg', ffmpegparams);
 
 
 
-    if (showErrorInStream == false) {
-        stream.stdout.pipe(res);
+
+
+
+
+
+    if (runner == undefined) {
+        if (checkIfstreamlinkCanHandle(url) == true) {
+            runner = "streamlink"
+            log("System selected the runner " + runner);
+            PIDOffset = 1;
+        } else {
+            runner = "ffmpeg"
+            log("System selected the runner " + runner);
+            PIDOffset = 0;
+        }
     }
 
 
-    stream.stderr.pipe(process.stderr);
+    switch (runner) {
+        case "streamlink":
+            log(`opening connect for restream ${url} to ${output} with streamlink and ffmpeg (from ${clientIP})`);
+            if (os.platform != "win32") {
+                command = config.streamlinkpath + 'streamlink ' + url + ' best --stdout | ' + config.ffmpegpath + 'ffmpeg  -loglevel error -i pipe:0 -f ' + format + ' ' + output;
+            } else {
+                command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' ' + vcodec + ' ' + acodec + '  -f ' + format + ' ' + output;
+            }
+
+            break;
+        case "ffmpeg":
+            log(`opening connect for restream ${url} to ${output} with ffmpeg (from ${clientIP})`);
+            command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' ' + vcodec + ' ' + acodec + '  -f ' + format + ' ' + output;
+
+            break;
+        default:
+            log("runner " + runner + " is invalid");
+            res.status(500).send("invalid runner");
+            return false;
+    }
+    if (os.platform == 'win32') {
+        stream = spawn(command, { shell: 'powershell.exe' });
+    } else {
+        stream = spawn(command, { shell: true });
+    }
+
+
+
+
+
+    if (runner == 'streamlink' && os.platform == 'win32') {
+        warning = "note that as the server runs on windows platform, it is only possible to restream urls that are compatible with ffmpeg";
+    }
+
+
+    res.send(`<h2>restream started, url ${url} is restreaming to ${output} <h2><br><h3>${warning}</h3>`);
     var spawncommand = stream.spawnargs;
     stream.on('spawn', () => { // on app initialization
 
@@ -292,10 +1183,10 @@ app.get('/videostream/ffmpeg', (req, res) => {
         spawncommand = spawncommand.toString();
         spawncommand = spawncommand.replace(/,/g, ' ');
 
-        addprocess(req, stream, auth.user, 0)
+        addprocess(req, stream, auth.user, "restream", output)
         log(`running ffmpeg app (PID ${stream.pid}) [${spawncommand}]`);
         debug.PID = stream.pid;
-        debug.app = "ffmpeg";
+        debug.app = "audiostreamconverter";
         debug.url = url;
         debug.command = spawncommand;
         debug.lastEvent = "spawn";
@@ -304,21 +1195,11 @@ app.get('/videostream/ffmpeg', (req, res) => {
         debug.message = "On Spawn command";
         debug.statusExec = "Running";
     })
-
-    stream.stdout.on('data', (data) => {
-        if (streamstart == false && showErrorInStream == true) {
-            stream.stdout.pipe(res);
-            streamstart = true;
-        }
-
-        setDataSize(stream.pid, data);
-    })
-
     stream.on('close', (code, signal) => { // on app closed
         log(`close stop of PID ${stream.pid}, code ${code}, signal ${signal}`);
         removeprocess(stream.pid);
         debug.PID = stream.pid;
-        debug.app = "ffmpeg";
+        debug.app = "audiostreamconverter";
         debug.url = url;
         debug.command = spawncommand;
         debug.lastEvent = "close";
@@ -326,13 +1207,18 @@ app.get('/videostream/ffmpeg', (req, res) => {
         debug.exitSignal = signal;
         debug.message = "On close";
         debug.statusExec = "closed";
+
+    })
+
+    stream.stdout.on('data', (data) => {
+
+        setDataSize(stream.pid, data);
     })
 
     stream.on('exit', (code, signal) => {
-
         removeprocess(stream.pid);
         debug.PID = stream.pid;
-        debug.app = "ffmpeg";
+        debug.app = "audiostreamconverter";
         debug.url = url;
         debug.command = spawncommand;
         debug.lastEvent = "exit";
@@ -340,12 +1226,13 @@ app.get('/videostream/ffmpeg', (req, res) => {
         debug.exitSignal = signal;
         debug.message = "On exit";
         debug.statusExec = "closed";
+
     })
 
     stream.on('error', (err) => { // on error on app
         removeprocess(stream.pid);
         debug.PID = stream.pid;
-        debug.app = "ffmpeg";
+        debug.app = "audiostreamconverter";
         debug.url = url;
         debug.command = spawncommand;
         debug.lastEvent = "error";
@@ -356,22 +1243,24 @@ app.get('/videostream/ffmpeg', (req, res) => {
         log(`error ocurred: ${err}`);
         debug.lastError = err;
         res.status(500).send("<h2>Error on calling ffmpeg app</h2><br>" + err)
+
+    })
+
+    stream.on('message', (message, sendHandle) => {
+        log(`message: ${message}`);
+    })
+
+    req.on('close', () => { // on connection close, kill PID of app
+        // console.log(`closed connection of url ${url}`);
+        //  removeprocess(stream.pid);
+        //stream.kill();
+        // killProcesses(stream.pid);
+
     })
 
     stream.stderr.on('data', (data) => {
         debug.lastConsoleData.stdErr = data.toString();
-        //streamerror = data.toString();
         log(data.toString());
-
-        if (showErrorInStream == true) {
-            streamerror = displayErrorInStream(data.toString());
-            streamerrorpid = streamerror.pid;
-            log("start ffmpeg for message error in PID: " + streamerror.pid);
-            streamerror.stdout.pipe(res);
-        }
-
-
-
     })
 
     stream.stdin.on('data', (data) => {
@@ -379,21 +1268,61 @@ app.get('/videostream/ffmpeg', (req, res) => {
     })
 
 
-    stream.on('message', (message, sendHandle) => {
-        log(`message: ${message}`);
-    })
-
-    req.on('close', () => { // on connection close, kill PID of app
-        log(`closed connection of url ${url}`);
-        log(`kill PID ${stream.pid} of program ffmpeg`)
-        killProcesses(stream.pid);
-        if (streamerrorpid != 0) {
-            killProcesses(streamerrorpid)
-        }
-    })
-
 });
 
+app.get('/play/*', (req, res) => {
+    //res.status(900).send(JSON.stringify(processes));
+    //while (actualstream != null) {
+    //    res.send(actualstream);
+    //}
+
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
+
+    var streamname = req.path;
+    var UUID = generateUUID();
+    streamname = streamname.substring(streamname.lastIndexOf('/') + 1);
+    //var streamserver = req.query.streamserver;
+    var arrstreamserverfilter = arrstreamserver.filter(value => value.servername == streamname);
+    if (arrstreamserverfilter.length <= 0) {
+        res.status(404).send("no stream server has created with name " + streamname);
+        return false;
+    }
+    addStreamServerStatus(req, auth, streamname, UUID);
+    var mytunnel = arrstreamserverfilter[0].tunnel;
+    mytunnel.pipe(res);
+
+    req.on('close', () => { // on connection close, kill PID of app
+        removeStreamServerStatus(UUID);
+        //console.log(`closed connection of url ${url}`);
+        //console.log(`kill PID ${stream.pid} of program streamlink`)
+        //stream.kill();
+        //killProcesses(stream.pid);
+    })
+});
+
+app.get('/api/streamserver/status', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
+    var streamservername = req.query.servername;
+    var streamserverstatusfiltered = undefined;
+    if (streamservername != undefined) {
+        streamserverstatusfiltered = streamserverstatus.filter(val => val.streamname == streamservername);
+    } else {
+        streamserverstatusfiltered = streamserverstatus;
+    }
+    res.json(streamserverstatusfiltered);
+});
+
+/*
+app.get('/api/streamserver', (req, res) => {
+    res.json(arrstreamserver);
+});
+*/
 
 // Get streaminfo: http://<ip>:<port>?url=<url>
 app.get('/api/streaminfo', (req, res) => {
@@ -452,27 +1381,8 @@ app.get('/api/checkstream', (req, res) => {
     url = req.query.url;
     url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
 
-    var commandffmpeg = config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i \"" + url + "\" -vframes 1 -q:v 2 -f null -";
 
-    var status = "";
-    var erro = "";
-
-    try {
-        retunrcommand = require('child_process').execSync(commandffmpeg);
-        status = "online";
-    } catch (e) {
-        var streamlinkcheck = checkStreamlink(url);
-        if (streamlinkcheck.streamstatus == "offline") {
-            status = "offline";
-            erro = e.message;
-        } else {
-            status = streamlinkcheck.streamstatus;
-            erro = "get from streamlink";
-
-        }
-
-    }
-    res.json({ streamurl: url, streamstatus: status, mensagem: erro });
+    res.json(checkstream(url));
 });
 
 app.get('/api/status', (req, res) => {
@@ -515,12 +1425,20 @@ app.get('/info', (req, res) => {
 
         };
     */
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
     //var timestamp = new Date().getTime();
     res.setHeader('Content-Type', 'application/json');
-    res.send(info);
+    res.json(info);
+    //res.send(req.useragent);
 });
 
-
+app.get('/clientinfo', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.json(req.useragent);
+});
 
 app.get('/api/log', (req, res) => {
     var auth = basicAuth(req, res);
@@ -531,6 +1449,10 @@ app.get('/api/log', (req, res) => {
 })
 
 app.post('/api/clearlog', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
     try {
         logdata = [];
         res.json({ run: true });
@@ -685,11 +1607,17 @@ app.post('/api/killProcess', (req, res) => {
 
     }
     */
-    basicAuth(req, res);
+    //basicAuth(req, res);
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
     try {
         killProcesses(req.body.PID);
+
         res.status(200).send("requested the SO to kill process " + req.body.PID);
     } catch (e) {
+        res.statusMessage = e.message;
         res.status(500).send("error on kill process " + req.body.PID + ", error: " + e.message);
     }
 
@@ -726,13 +1654,7 @@ app.get('/stopserver', (req, res) => {
 });
 
 
-app.get('/teste', (req, res) => {
-    //res.status(900).send(JSON.stringify(processes));
-    //while (actualstream != null) {
-    //    res.send(actualstream);
-    //}
-    tunnel.pipe(res);
-});
+
 
 
 app.get('/status', (req, res) => {
@@ -935,9 +1857,11 @@ app.get('/status', (req, res) => {
                   }
                   htmlData += '<td>'+table.url+'</td>';
                   if(table.streamlinkserver == true){
-                      htmlData += '<td>http://${os.hostname}:'+responseObj.streamArgs+'</td>';
+                      htmlData += '<td>http://${req.host}:'+table.streamArgs+'</td>';
                   } else if (table.restream == true) {
                     htmlData += '<td>'+table.streamArgs+'</td>';
+                  } else if (table.isStreamServer == true) {
+                    htmlData += '<td><a href="http://${req.hostname}:${getPortCalled(req)}/streamserver/status?streamname='+table.streamArgs+'">http://${req.hostname}:${getPortCalled(req)}/play/'+table.streamArgs+'</a></td>';
                   } else {
                      htmlData += '<td>${req.ip}</td>';
                   }
@@ -1039,6 +1963,10 @@ app.get('/status', (req, res) => {
 app.get('/status/*', (req, res) => {
     var pidtoSee = req.path;
     var data = "";
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
     pidtoSee = pidtoSee.substring(pidtoSee.lastIndexOf('/') + 1);
     var myprocess = processes.filter(process => process.PID == pidtoSee)
     if (myprocess.length == 0) {
@@ -1075,6 +2003,11 @@ app.get('/status/*', (req, res) => {
     </head>
     <body>
     <h1>child processes from ${pidtoSee}</h1>
+    OS: ${myprocess[0].client.os}<br>
+    Browser: ${myprocess[0].client.browser}<br>
+    platform: ${myprocess[0].client.platform}<br>
+    user-agent: ${myprocess[0].client.source}<br>
+    <p></p>
     <table>
     <tr>
       <th>PID</th>
@@ -1101,6 +2034,7 @@ app.get('/', (req, res) => {
 
 // help page, captured from github pages
 app.get('/about', async function(req, res) {
+    const port = getPortCalled(req)
     const https = require("https");
     const serversearch = "&lt;serverip&gt;";
     const portsearch = "&lt;port&gt;";
@@ -1123,8 +2057,8 @@ app.get('/about', async function(req, res) {
         resp.on('end', () => {
 
             data = data.replace(serverreplacer, req.hostname);
-            data = data.replace(portreplacer, config.port);
-            data = data.replace(localhostreplacer, req.hostname + ":" + config.port);
+            data = data.replace(portreplacer, port);
+            data = data.replace(localhostreplacer, req.hostname + ":" + port);
             res.send(data);
         });
 
@@ -1135,560 +2069,7 @@ app.get('/about', async function(req, res) {
 
 });
 
-//convert to audio
-app.get('/audiostream/play', (req, res) => {
-    var PIDOffset = 0;
-    var command = "";
-    if (checkToken(req, res) == false) {
-        return false;
-    };
 
-    var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
-        return false;
-    }
-
-    appsetheader(res);
-
-    url = req.query.url;
-    announceStreaming(url);
-    url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
-    var runner = req.query.runner;
-    log("*** Convert videostream to audiostream")
-    log("you selected the runner " + runner)
-    var stream = "";
-    var title = req.query.title;
-
-    var clientIP = req.ip;
-    debug.remoteIP = req.ip;
-    debug.endpoint = req.path;
-    var metadata = "";
-    if (title == undefined) {
-        title = "streamproxy audio";
-    }
-    metadata = `-metadata icy-aim="N/A" -metadata icy-br=128 -metadata icy-genre="misc" -metadata icy-icq="N/A" -metadata icy-irc="N/A" -metadata icy-name="streamproxy" -metadata icy-prebuffer=64000 -metadata icy-pub=1 -metadata StreamTitle="${title}" -metadata title="${title}"`;
-
-
-
-
-
-
-
-    if (runner == undefined) {
-        if (checkIfstreamlinkCanHandle(url) == true) {
-            runner = "streamlink"
-            log("System selected the runner " + runner);
-            PIDOffset = 1;
-        } else {
-            runner = "ffmpeg"
-            log("System selected the runner " + runner);
-            PIDOffset = 0;
-        }
-    }
-
-
-    switch (runner) {
-        case "streamlink":
-            log(`opening connect to stream in url ${url} for audiconverter with streamlink and ffmpeg (from ${clientIP})`);
-            if (os.platform != "win32") {
-                command = config.streamlinkpath + 'streamlink ' + url + ' worst --stdout | ' + config.ffmpegpath + 'ffmpeg  -loglevel error -i pipe:0 -c:v none -c:a libmp3lame -b:a 128k -joint_stereo 0 -y -f mp3 ' + metadata + ' -'
-            } else {
-                command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' -c:v none -c:a libmp3lame -b:a 128k -joint_stereo 0 -y -f mp3 ' + metadata + '  -'
-            }
-
-            break;
-        case "ffmpeg":
-            log(`opening connect to stream in url ${url} for audiconverter with ffmpeg (from ${clientIP})`);
-            command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' -c:v none -c:a libmp3lame -b:a 128k -joint_stereo 0 -y -f mp3 ' + metadata + '  -'
-
-            break;
-        default:
-            log("runner " + runner + " is invalid");
-            res.status(500).send("invalid runner");
-            return false;
-    }
-    if (os.platform == 'win32') {
-        stream = spawn(command, { shell: 'powershell.exe' });
-    } else {
-        stream = spawn(command, { shell: true });
-    }
-
-
-
-
-
-
-
-
-    stream.stdout.pipe(res);
-    stream.stderr.pipe(process.stderr);
-    var spawncommand = stream.spawnargs;
-    stream.on('spawn', () => { // on app initialization
-
-
-        spawncommand = spawncommand.toString();
-        spawncommand = spawncommand.replace(/,/g, ' ');
-
-        addprocess(req, stream, auth.user, PIDOffset)
-        log(`running ffmpeg app (PID ${stream.pid}) [${spawncommand}]`);
-        debug.PID = stream.pid;
-        debug.app = "audiostreamconverter";
-        debug.url = url;
-        debug.command = spawncommand;
-        debug.lastEvent = "spawn";
-        debug.exitCode = "";
-        debug.exitSignal = "";
-        debug.message = "On Spawn command";
-        debug.statusExec = "Running";
-    })
-    stream.on('close', (code, signal) => { // on app closed
-        log(`close stop of PID ${stream.pid}, code ${code}, signal ${signal}`);
-        removeprocess(stream.pid);
-        debug.PID = stream.pid;
-        debug.app = "audiostreamconverter";
-        debug.url = url;
-        debug.command = spawncommand;
-        debug.lastEvent = "close";
-        debug.exitCode = code;
-        debug.exitSignal = signal;
-        debug.message = "On close";
-        debug.statusExec = "closed";
-
-    })
-
-    stream.stdout.on('data', (data) => {
-
-        setDataSize(stream.pid, data);
-    })
-
-    stream.on('exit', (code, signal) => {
-        removeprocess(stream.pid);
-        debug.PID = stream.pid;
-        debug.app = "audiostreamconverter";
-        debug.url = url;
-        debug.command = spawncommand;
-        debug.lastEvent = "exit";
-        debug.exitCode = code;
-        debug.exitSignal = signal;
-        debug.message = "On exit";
-        debug.statusExec = "closed";
-
-    })
-
-    stream.on('error', (err) => { // on error on app
-        removeprocess(stream.pid);
-        debug.PID = stream.pid;
-        debug.app = "audiostreamconverter";
-        debug.url = url;
-        debug.command = spawncommand;
-        debug.lastEvent = "error";
-        debug.exitCode = "";
-        debug.exitSignal = "";
-        debug.message = err;
-        debug.statusExec = "closed with error";
-        log(`error ocurred: ${err}`);
-        debug.lastError = err;
-        res.status(500).send("<h2>Error on calling ffmpeg app</h2><br>" + err)
-
-    })
-
-    stream.on('message', (message, sendHandle) => {
-        log(`message: ${message}`);
-    })
-
-    req.on('close', () => { // on connection close, kill PID of app
-        log(`closed connection of url ${url}`);
-        removeprocess(stream.pid);
-        //stream.kill();
-        killProcesses(stream.pid);
-
-    })
-
-    stream.stderr.on('data', (data) => {
-        debug.lastConsoleData.stdErr = data.toString();
-        log(data.toString());
-    })
-
-    stream.stdin.on('data', (data) => {
-        debug.lastConsoleData.stdin = data.toString();
-    })
-
-
-});
-
-
-
-//videostream play
-app.get('/videostream/play', (req, res) => {
-    var command = "";
-    if (checkToken(req, res) == false) {
-        return false;
-    };
-
-    var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
-        return false;
-    }
-
-    appsetheader(res);
-
-    url = req.query.url;
-    announceStreaming(url);
-    url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
-
-
-
-    var clientIP = req.ip;
-    debug.remoteIP = req.ip;
-    debug.endpoint = req.path;
-    var metadata = "";
-
-
-
-
-
-    command = config.streamlinkpath + 'streamlink ' + url + ' best --stdout | ' + config.ffmpegpath + 'ffmpeg -loglevel error -i pipe:0 -vcodec ' + config.ffmpeg.codec + ' -acodec aac -b 15000k -strict -2 -mbd rd -copyinkf -flags +ilme+ildct -fflags +genpts -metadata service_provider="' + config.ffmpeg.serviceprovider + '" -f ' + config.ffmpeg.format + ' -tune zerolatency -'
-
-
-
-
-
-
-
-
-
-
-    log(`opening connect to stream in url ${url} for audiconverter with streamlink and ffmpeg (from ${clientIP})`);
-    if (os.platform == 'win32') {
-        res.status(400).send("this endpoint is not compatible with windows, use linux instead");
-        return false;
-        stream = spawn('"' + command + '"', { shell: 'powershell.exe' });
-    } else {
-        stream = spawn(command, { shell: true });
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-    stream.stdout.pipe(res);
-    stream.stderr.pipe(process.stderr);
-    var spawncommand = stream.spawnargs;
-    stream.on('spawn', () => { // on app initialization
-
-
-        spawncommand = spawncommand.toString();
-        spawncommand = spawncommand.replace(/,/g, ' ');
-
-        addprocess(req, stream, auth.user, 1)
-        log(`running ffmpeg app (PID ${stream.pid}) [${spawncommand}]`);
-        debug.PID = stream.pid;
-        debug.app = "videostreamplay";
-        debug.url = url;
-        debug.command = spawncommand;
-        debug.lastEvent = "spawn";
-        debug.exitCode = "";
-        debug.exitSignal = "";
-        debug.message = "On Spawn command";
-        debug.statusExec = "Running";
-    })
-    stream.on('close', (code, signal) => { // on app closed
-        log(`close stop of PID ${stream.pid}, code ${code}, signal ${signal}`);
-        removeprocess(stream.pid);
-        debug.PID = stream.pid;
-        debug.app = "videostreamplay";
-        debug.url = url;
-        debug.command = spawncommand;
-        debug.lastEvent = "close";
-        debug.exitCode = code;
-        debug.exitSignal = signal;
-        debug.message = "On close";
-        debug.statusExec = "closed";
-
-    })
-
-    stream.stdout.on('data', (data) => {
-
-        setDataSize(stream.pid, data);
-    })
-
-    stream.on('exit', (code, signal) => {
-        removeprocess(stream.pid);
-        debug.PID = stream.pid;
-        debug.app = "videostreamplay";
-        debug.url = url;
-        debug.command = spawncommand;
-        debug.lastEvent = "exit";
-        debug.exitCode = code;
-        debug.exitSignal = signal;
-        debug.message = "On exit";
-        debug.statusExec = "closed";
-
-    })
-
-    stream.on('error', (err) => { // on error on app
-        removeprocess(stream.pid);
-        debug.PID = stream.pid;
-        debug.app = "videostreamplay";
-        debug.url = url;
-        debug.command = spawncommand;
-        debug.lastEvent = "error";
-        debug.exitCode = "";
-        debug.exitSignal = "";
-        debug.message = err;
-        debug.statusExec = "closed with error";
-        log(`error ocurred: ${err}`);
-        debug.lastError = err;
-        res.status(500).send("<h2>Error on calling ffmpeg app</h2><br>" + err)
-
-    })
-
-    stream.on('message', (message, sendHandle) => {
-        log(`message: ${message}`);
-    })
-
-    req.on('close', () => { // on connection close, kill PID of app
-        log(`closed connection of url ${url}`);
-
-        removeprocess(stream.pid);
-        //stream.kill();
-        killProcesses(stream.pid);
-
-
-    })
-
-    stream.stderr.on('data', (data) => {
-        debug.lastConsoleData.stdErr = data.toString();
-        log(data.toString());
-    })
-
-    stream.stdin.on('data', (data) => {
-        debug.lastConsoleData.stdin = data.toString();
-    })
-
-
-});
-
-
-app.get('/streamserver/create', (req, res) => {
-    var auth = basicAuth(req, res);
-    var port = req.query.port;
-    if (port == undefined) {
-        port = config.port + 1;
-    }
-    if (auth.authenticated == false) {
-        return false;
-    }
-
-    streamlinkHTTPServer(req, res, auth, port);
-    res.send(`<h2>server created, see it in http://${os.hostname}:${port}</h2>`)
-})
-
-
-app.get('/videostream/restream', (req, res) => {
-    var PIDOffset = 0;
-    var command = "";
-    var format = req.query.format;
-    var vcodec = "";
-    var acodec = "";
-    var warning = "";
-    if (format == undefined) {
-        format = "flv";
-    }
-    if (checkToken(req, res) == false) {
-        return false;
-    };
-
-    var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
-        return false;
-    }
-    var output = req.query.output;
-    if (output == undefined) {
-        res.status(400).send("<h1>400 Bad Request - the query parameter output is required</h1>");
-        return false;
-    }
-
-    if (req.query.vcodec != undefined) {
-        vcodec = "-c:v " + req.query.vcodec;
-    }
-    if (req.query.acodec != undefined) {
-        acodec = "-c:a " + req.query.acodec;
-    }
-
-
-    appsetheader(res);
-
-    url = req.query.url;
-
-    announceStreaming(url);
-    url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
-    var runner = req.query.runner;
-    log("*** restream " + url + " to " + output);
-    log("you selected the runner " + runner)
-    var stream = "";
-
-
-    var clientIP = req.ip;
-    debug.remoteIP = req.ip;
-    debug.endpoint = req.path;
-
-
-
-
-
-
-
-
-    if (runner == undefined) {
-        if (checkIfstreamlinkCanHandle(url) == true) {
-            runner = "streamlink"
-            log("System selected the runner " + runner);
-            PIDOffset = 1;
-        } else {
-            runner = "ffmpeg"
-            log("System selected the runner " + runner);
-            PIDOffset = 0;
-        }
-    }
-
-
-    switch (runner) {
-        case "streamlink":
-            log(`opening connect for restream ${url} to ${output} with streamlink and ffmpeg (from ${clientIP})`);
-            if (os.platform != "win32") {
-                command = config.streamlinkpath + 'streamlink ' + url + ' best --stdout | ' + config.ffmpegpath + 'ffmpeg  -loglevel error -i pipe:0 -f ' + format + ' ' + output;
-            } else {
-                command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' ' + vcodec + ' ' + acodec + '  -f ' + format + ' ' + output;
-            }
-
-            break;
-        case "ffmpeg":
-            log(`opening connect for restream ${url} to ${output} with ffmpeg (from ${clientIP})`);
-            command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' ' + vcodec + ' ' + acodec + '  -f ' + format + ' ' + output;
-
-            break;
-        default:
-            log("runner " + runner + " is invalid");
-            res.status(500).send("invalid runner");
-            return false;
-    }
-    if (os.platform == 'win32') {
-        stream = spawn(command, { shell: 'powershell.exe' });
-    } else {
-        stream = spawn(command, { shell: true });
-    }
-
-
-
-
-
-    if (runner == 'streamlink' && os.platform == 'win32') {
-        warning = "note that as the server runs on windows platform, it is only possible to restream urls that are compatible with ffmpeg";
-    }
-
-
-    res.send(`<h2>restream started, url ${url} is restreaming to ${output} <h2><br><h3>${warning}</h3>`);
-    var spawncommand = stream.spawnargs;
-    stream.on('spawn', () => { // on app initialization
-
-
-        spawncommand = spawncommand.toString();
-        spawncommand = spawncommand.replace(/,/g, ' ');
-
-        addprocess(req, stream, auth.user, "restream", output)
-        log(`running ffmpeg app (PID ${stream.pid}) [${spawncommand}]`);
-        debug.PID = stream.pid;
-        debug.app = "audiostreamconverter";
-        debug.url = url;
-        debug.command = spawncommand;
-        debug.lastEvent = "spawn";
-        debug.exitCode = "";
-        debug.exitSignal = "";
-        debug.message = "On Spawn command";
-        debug.statusExec = "Running";
-    })
-    stream.on('close', (code, signal) => { // on app closed
-        log(`close stop of PID ${stream.pid}, code ${code}, signal ${signal}`);
-        removeprocess(stream.pid);
-        debug.PID = stream.pid;
-        debug.app = "audiostreamconverter";
-        debug.url = url;
-        debug.command = spawncommand;
-        debug.lastEvent = "close";
-        debug.exitCode = code;
-        debug.exitSignal = signal;
-        debug.message = "On close";
-        debug.statusExec = "closed";
-
-    })
-
-    stream.stdout.on('data', (data) => {
-
-        setDataSize(stream.pid, data);
-    })
-
-    stream.on('exit', (code, signal) => {
-        removeprocess(stream.pid);
-        debug.PID = stream.pid;
-        debug.app = "audiostreamconverter";
-        debug.url = url;
-        debug.command = spawncommand;
-        debug.lastEvent = "exit";
-        debug.exitCode = code;
-        debug.exitSignal = signal;
-        debug.message = "On exit";
-        debug.statusExec = "closed";
-
-    })
-
-    stream.on('error', (err) => { // on error on app
-        removeprocess(stream.pid);
-        debug.PID = stream.pid;
-        debug.app = "audiostreamconverter";
-        debug.url = url;
-        debug.command = spawncommand;
-        debug.lastEvent = "error";
-        debug.exitCode = "";
-        debug.exitSignal = "";
-        debug.message = err;
-        debug.statusExec = "closed with error";
-        log(`error ocurred: ${err}`);
-        debug.lastError = err;
-        res.status(500).send("<h2>Error on calling ffmpeg app</h2><br>" + err)
-
-    })
-
-    stream.on('message', (message, sendHandle) => {
-        log(`message: ${message}`);
-    })
-
-    req.on('close', () => { // on connection close, kill PID of app
-        // console.log(`closed connection of url ${url}`);
-        //  removeprocess(stream.pid);
-        //stream.kill();
-        // killProcesses(stream.pid);
-
-    })
-
-    stream.stderr.on('data', (data) => {
-        debug.lastConsoleData.stdErr = data.toString();
-        log(data.toString());
-    })
-
-    stream.stdin.on('data', (data) => {
-        debug.lastConsoleData.stdin = data.toString();
-    })
-
-
-});
 
 
 var server = app.listen(config.port);
@@ -1779,6 +2160,9 @@ function addprocess(req, spawn, user, streamservertype, streamserverArgs) {
     var childprocesses = getChildProcess(spawn.pid);
     var streamlinkserver = false;
     var restream = false;
+    var isStreamServer = false;
+    var streamserver = streamserverArgs;
+    var useragent = req.headers["user-agent"];
     //console("stream server type: " + streamservertype);
     //console("stream args: " + streamserverArgs);
     switch (streamservertype) {
@@ -1788,13 +2172,16 @@ function addprocess(req, spawn, user, streamservertype, streamserverArgs) {
         case "restream":
             restream = true;
             break;
+        case "streamserver":
+            isStreamServer = true;
+            //streamserver = streamserverArgs;
     }
 
 
     spawncommand = spawncommand.toString();
     spawncommand = spawncommand.replace(/,/g, ' ');
     log("added process " + PID + " to status");
-    processes.push({ url: req.query.url, PID: PID, childprocess: childprocesses, clientIP: req.ip, endpoint: req.path, command: spawncommand, dataSize: 0, user: user, streamlinkserver: streamlinkserver, restream: restream, streamArgs: streamserverArgs });
+    processes.push({ url: req.query.url, PID: PID, childprocess: childprocesses, clientIP: req.ip, endpoint: req.path, command: spawncommand, dataSize: 0, user: user, streamlinkserver: streamlinkserver, restream: restream, isStreamServer: isStreamServer, streamArgs: streamserverArgs, client: { ip: req.ip, isMobile: req.useragent.isMobile, isPhone: req.useragent.isPhone, isAndroid: req.useragent.isAndroid, isDesktop: req.useragent.isDesktop, isLinux: req.useragent.isLinux, isWindows: req.useragent.isWindows, isBot: req.useragent.isBot, browser: req.useragent.browser, version: req.useragent.version, os: req.useragent.os, platform: req.useragent.platform, source: req.useragent.source } });
 
 }
 
@@ -2010,7 +2397,8 @@ function getChildProcess(PID, globalpids = []) {
 
 function killProcesses(parentPID) {
     var childprocesses = getChildProcess(parentPID);
-
+    //arrstreamserver = arrstreamserver.filter(val => val.PID != parentPID);
+    removeStreamServer(parentPID);
     if (childprocesses.length > 0) {
         childprocesses.forEach((pid) => {
             process.kill(pid.pid);
@@ -2174,8 +2562,10 @@ function log(logtext) {
 
 }
 
-function ffmpegDisplayText(text) {
+function ffmpegDisplayText(text = "", bgimage = "", size = "1920x1080", bgcolor = "blue", fontcolor = "white", font = "/path/to/font.ttf", format = "h264") {
     var ffmpegcomm = "";
+    var bgimagestr = ""
+    var textstr = "";
     var textlen = text.length;
     var fontsize = 0;
     if (textlen < 15) {
@@ -2186,7 +2576,16 @@ function ffmpegDisplayText(text) {
     if (fontsize < 5) {
         fontsize = 25;
     }
-    ffmpegcomm = `${config.ffmpegpath}ffmpeg -loglevel fatal -f lavfi -i color=size=1920x1080:rate=25:color=blue  -vf "drawtext=fontfile=/c/windows/fonts/times.ttf:fontsize=${fontsize}:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:text='${text}'" -c:a copy -shortest -tune zerolatency -f h264 -`;
+
+    if (bgimage != "" && bgimage != undefined) {
+        bgimagestr = `-loop 1 -f image2 -i ${bgimage} `
+    }
+    if (text != "" && text != undefined) {
+        textstr = `-f lavfi  -i color=size=${size}:rate=25:color=${bgcolor}  -vf "drawtext=fontfile=${font}:fontsize=${fontsize}:fontcolor=${fontcolor}:x=(w-text_w)/2:y=(h-text_h)/2:text='${text}'"`
+    }
+    //ffmpegcomm = `${config.ffmpegpath}ffmpeg -loglevel fatal ${bgimagestr} -f lavfi  -i color=size=${size}:rate=25:color=${bgcolor}  -vf "drawtext=fontfile=${font}:fontsize=${fontsize}:fontcolor=${fontcolor}:x=(w-text_w)/2:y=(h-text_h)/2:text='${text}'" -c:a copy -shortest -tune zerolatency -f ${format} -`;
+    ffmpegcomm = `${config.ffmpegpath}ffmpeg -loglevel error  ${bgimagestr} ${textstr} -c:v libx264  -t 30  -f ${format} -`;
+
     //console.log("ffmpeg command for errordisplay: " + ffmpegcomm);
     if (os.platform() == 'win32') {
         return spawn(ffmpegcomm, { shell: 'powershell.exe' });
@@ -2195,12 +2594,30 @@ function ffmpegDisplayText(text) {
     }
 }
 
+
+
 function displayErrorInStream(errortext) {
     var texttodisplay = errortext;
     var separatedtext = errortext.split("\r\n");
 
+
+    var ffmpegcomm = "";
+    var bgimagestr = ""
+    var textstr = "";
+    var textlen = errortext.length;
+    var fontsize = 0;
+    if (textlen < 15) {
+        fontsize = 55;
+    } else {
+        fontsize = 130 - textlen;
+    }
+    if (fontsize < 5) {
+        fontsize = 25;
+    }
+
     //return ffmpegDisplayText(separatedtext[0]);
     ffmpegcomm = `${config.ffmpegpath}ffmpeg -loglevel error -loop 1 -f image2 -i ./resources/nosignal.jpg -c:v libx264 -t 50 -f h264 -`;
+    //ffmpegcomm = `${config.ffmpegpath}ffmpeg -loglevel error -loop 1 -f image2 -i ./resources/nosignal.jpg -f lavfi  -i color=size=1280x720:rate=25:color=blue  -vf "drawtext=fontfile=/path/to/font.ttf:fontsize=25:fontcolor=white:box=1:boxcolor=black:x=(w-text_w)/2:y=(h-text_h)/2:text='teste123'"-c:v libx264 -t 50 -f h264 -`;
     console.log("ffmpeg command for errordisplay: " + ffmpegcomm);
     if (os.platform() == 'win32') {
         return spawn(ffmpegcomm, { shell: 'powershell.exe' });
@@ -2264,4 +2681,379 @@ function checkVersion(a, b) {
     } else {
         return -1;
     }
+}
+
+function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
+    var bufcount = 0;
+    var stream = undefined;
+    var streamerror = undefined;
+    var streamstart = false;
+    var showErrorInStream = false;
+    var streamerrorpid = 0;
+    var streamserver = req.query.streamserver;
+    var isStreamServer = false;
+    var tunnel = new PassThrough();
+    var html = "";
+    var clientIP = req.ip;
+    var streamcheck = undefined;
+    var serverdescription = undefined;
+    var chnumber = undefined;
+    var radio = false;
+    url = req.query.url;
+    url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
+
+
+
+    if (checkToken(req, res) == false) {
+        return false;
+    };
+
+
+
+
+
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
+
+    if (streamserver != undefined) {
+        isStreamServer = true;
+        streamserver = encodeURI(streamserver);
+        if (req.query.streamdescription != undefined) {
+            serverdescription = req.query.streamdescription;
+        } else {
+            serverdescription = req.query.streamserver;
+        }
+        chnumber = req.query.chnumber;
+        if (req.path.indexOf('audiostream') >= 0) {
+            radio = true;
+        }
+
+    }
+
+    if (isCallFromBrowser(req) == true && isStreamServer == false) {
+        res.status(400).send(`<h2>This endpoint must be inserted in IPTV app</h2><br> 
+                              <h2> if you are trying to create a stream server, enter in url on browser</h2> 
+                              <h3>http://${os.hostname}:${config.port}${req.path}?url=${url}&streamserver=&lt;streamservernamel&gt;</h3>`)
+        return false;
+    }
+
+    if (isCallFromBrowser(req) == false && isStreamServer == true) {
+        res.statusMessage = "you can only use the streamserver query parameter in browser"
+        res.status(400).end()
+        return false;
+    }
+
+
+    if (streamServerExist(streamserver) == true) {
+        res.status(500).send(`<h2> the stream server ${streamserver} already exists!</h2>`);
+        return false;
+    }
+
+    if ((config.showErrorInStream == true || req.query.showerrorinstream == 'true') && noDisplayErrorInStream == false && isStreamServer == false) {
+        showErrorInStream = true;
+        log("Show error in stream is enabled");
+    }
+
+    appsetheader(res);
+    /*
+    if (isStreamServer == true) {
+        
+        streamcheck = checkstream(url);
+        if (streamcheck.streamstatus == 'online') {
+            html += `<h1>Stream Server created successfully</h1><br>
+                <p></p>
+                <p> to play this stream, add the url http://${req.hostname}:${getPortCalled(req)}/play/${streamserver} in your IPTV app</p>
+                <p> ex: ffplay http://${req.hostname}:${getPortCalled(req)}/play/${streamserver}</p>
+                <p> you can also download a playlist with all stream serves created from <a href="http://${req.hostname}:${getPortCalled(req)}/streamserver/playlist.m3u">http://${req.hostname}:${getPortCalled(req)}/streamserver/playlist.m3u</a>`
+            res.send(html);
+
+        } else {
+            html += `<h1>Stream Server creation not successfully</h1><br>
+                <p></p>
+                <p> Message returned on check stream: <b><font color="red">${streamcheck.mensagem}</font></b></p>
+                `
+            res.send(html);
+        }
+
+    }
+*/
+    announceStreaming(url);
+    debug.remoteIP = req.ip;
+    debug.endpoint = req.path;
+
+    log(`opening connect to stream in url ${url} from ${clientIP}`);
+
+    stream = spawn;
+
+    if (showErrorInStream == false && isStreamServer == false) {
+        stream.stdout.pipe(res);
+    }
+    //stream.stdout.pipe(tunnel);
+    //res.send("tunnel criado");
+
+    stream.stderr.pipe(process.stderr);
+
+    var spawncommand = stream.spawnargs;
+    stream.on('spawn', () => { // on app initialization
+
+        databuf = { header: [], data: undefined };
+        //console.log("to string " + spawncommand.toString());
+        spawncommand = spawncommand.toString();
+        spawncommand = spawncommand.replace(/,/g, ' ');
+        if (isStreamServer == false) {
+            addprocess(req, stream, auth.user, 0)
+        } else {
+            addprocess(req, stream, auth.user, "streamserver", streamserver)
+        }
+        log(`running ${app} app (PID ${stream.pid}) [${spawncommand}]`);
+        debug.PID = stream.pid;
+        debug.app = app;
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "spawn";
+        debug.exitCode = "";
+        debug.exitSignal = "";
+        debug.message = "On Spawn command";
+        debug.statusExec = "Running";
+
+        /*
+        if (isStreamServer == true) {
+            arrstreamserver.push({ PID: stream.pid, servername: streamserver, serverdescription: decodeURI(serverdescription), chnumber: chnumber, tunnel: tunnel })
+        }
+*/
+
+    })
+    stream.on('close', (code, signal) => { // on app closed
+        log(`close stop of PID ${stream.pid}, code ${code}, signal ${signal}`);
+        removeprocess(stream.pid);
+        debug.PID = stream.pid;
+        debug.app = app;
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "close";
+        debug.exitCode = code;
+        debug.exitSignal = signal;
+        debug.message = "On close";
+        debug.statusExec = "closed";
+        removeStreamServer(stream.pid);
+
+
+    })
+
+    stream.stdout.on('data', (data) => {
+        if (streamstart == false && showErrorInStream == true && isStreamServer == false) {
+            stream.stdout.pipe(res);
+
+        }
+
+        if (isStreamServer == true) {
+            tunnel.write(data);
+        }
+        setDataSize(stream.pid, data);
+        //tunnel.write(data);
+        if (isStreamServer == true && streamstart == false) {
+            html += `<h1>Stream Server created successfully</h1><br>
+            <p></p>
+            <p> to play this stream, add the url http://${req.hostname}:${getPortCalled(req)}/play/${streamserver} in your IPTV app</p>
+            <p> ex: ffplay http://${req.hostname}:${getPortCalled(req)}/play/${streamserver}</p>
+            <p> you can also download a playlist with all stream serves created from <a href="http://${req.hostname}:${getPortCalled(req)}/streamserver/playlist.m3u">http://${req.hostname}:${getPortCalled(req)}/streamserver/playlist.m3u</a>`
+            if (isStreamServer == true) {
+                arrstreamserver.push({ PID: stream.pid, servername: streamserver, serverdescription: decodeURI(serverdescription), chnumber: chnumber, radio: radio, tunnel: tunnel })
+            }
+            res.send(html);
+        }
+        streamstart = true;
+
+    })
+
+    stream.stderr.on('data', (data) => {
+        var stderrmsg = data.toString()
+        var msgtodisplay = "";
+
+        var msgsplit = stderrmsg.split('\r\n');
+        debug.lastConsoleData.stdErr = data.toString();
+
+        log(data.toString());
+        var haserror = stderrmsg.indexOf("error");
+        removeStreamServer(stream.pid);
+        //console.log("has error: " + haserror);
+        if (showErrorInStream == true && haserror > -1) {
+            if (msgsplit.length > 0) {
+                // var msgtodisplay = msgsplit[1].substring(7, 30)
+            } else {
+                // var msgtodisplay = msgsplit[0].substring(7, 30)
+            }
+
+            //msgtodisplay = msgtodisplay.replace(/'/g, "");
+            //streamerror = displayErrorInStream(msgtodisplay);
+            streamerror = displayErrorInStream("error");
+            streamerrorpid = streamerror.pid;
+            log("start ffmpeg for message error in PID: " + streamerror.pid);
+            streamerror.stdout.pipe(res);
+        }
+
+        if (isStreamServer == true) {
+            html += `<h1>Stream Server creation not successfully</h1><br>
+            <p></p>
+            <p> Message returned : <b><font color="red">${stderrmsg}</font></b></p>
+            `
+            res.send(html);
+        }
+
+    })
+
+    stream.stdin.on('data', (data) => {
+        debug.lastConsoleData.stdin = data.toString();
+    })
+
+    stream.on('exit', (code, signal) => {
+
+        removeprocess(stream.pid);
+        debug.PID = stream.pid;
+        debug.app = app;
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "exit";
+        debug.exitCode = code;
+        debug.exitSignal = signal;
+        debug.message = "On exit";
+        debug.statusExec = "closed";
+        removeStreamServer(stream.pid);
+
+    })
+
+    stream.on('error', (err) => { // on error on app
+        removeprocess(stream.pid);
+        log(`error ocurred: ${err}`);
+        debug.PID = stream.pid;
+        debug.app = app;
+        debug.url = url;
+        debug.command = spawncommand;
+        debug.lastEvent = "error";
+        debug.exitCode = "";
+        debug.exitSignal = "";
+        debug.message = err;
+        debug.statusExec = "closed with error";
+        debug.lastError = err;
+        res.statusMessage = "Error on calling streamlink app => " + err
+        if (isStreamServer == true) {
+            html += `<h1>Stream Server creation not successfully</h1><br>
+            <p></p>
+            <p> Message returned : <b><font color="red">${error}</font></b></p>
+            `
+            res.send(html);
+        } else {
+            res.status(500).send("<h2>Error on calling streamlink app</h2><br>" + err)
+        }
+
+    })
+
+    stream.on('message', (message, sendHandle) => { // on message
+        log(`message: ${message}`);
+    })
+
+    req.on('close', () => { // on connection close, kill PID of app
+        if (isStreamServer == false) {
+            log(`closed connection of url ${url}`);
+            log(`kill PID ${stream.pid} of program streamlink`)
+                //stream.kill();
+            killProcesses(stream.pid);
+            try {
+                killProcesses(streamerror.pid);
+            } catch (e) {
+                //console.log("error on kill process of ffmpeg display error: " + e.message);
+            }
+        }
+    })
+}
+
+function streamServerExist(streamservername) {
+    var findstreamservername = arrstreamserver.filter(val => val.streamname == streamservername);
+    if (findstreamservername.length > 0) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+function removeStreamServer(PID) {
+    arrstreamserver = arrstreamserver.filter(val => val.PID !== PID)
+}
+
+function isCallFromBrowser(req) {
+    if (req.useragent.isAuthoritative == true) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+function checkstream(url) {
+    var commandffmpeg = config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i \"" + url + "\" -vframes 1 -q:v 2 -f null -";
+
+    var status = "";
+    var erro = "";
+
+    try {
+        retunrcommand = require('child_process').execSync(commandffmpeg);
+        status = "online";
+    } catch (e) {
+        var streamlinkcheck = checkStreamlink(url);
+        if (streamlinkcheck.streamstatus == "offline") {
+            status = "offline";
+            erro = e.message;
+        } else {
+            status = streamlinkcheck.streamstatus;
+            erro = "get from streamlink";
+
+        }
+
+    }
+    return { streamurl: url, streamstatus: status, mensagem: erro };
+}
+
+function addStreamServerStatus(req, auth, streamname, UUID) {
+    var theprocess = processes.filter(val => val.isStreamServer == true && val.streamArgs == streamname);
+    streamserverstatus.push({ UUID: UUID, streamname: streamname, pid: theprocess[0].PID, user: auth.user, client: { ip: req.ip, isMobile: req.useragent.isMobile, isPhone: req.useragent.isPhone, isAndroid: req.useragent.isAndroid, isDesktop: req.useragent.isDesktop, isLinux: req.useragent.isLinux, isWindows: req.useragent.isWindows, isBot: req.useragent.isBot, browser: req.useragent.browser, version: req.useragent.version, os: req.useragent.os, platform: req.useragent.platform, source: req.useragent.source } })
+
+}
+
+function removeStreamServerStatus(UUID) {
+    streamserverstatus = streamserverstatus.filter(val => val.UUID != UUID);
+}
+
+function generateUUID() { // Public Domain/MIT
+    var d = new Date().getTime(); //Timestamp
+    var d2 = ((typeof performance !== 'undefined') && performance.now && (performance.now() * 1000)) || 0; //Time in microseconds since page-load or 0 if unsupported
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16; //random number between 0 and 16
+        if (d > 0) { //Use timestamp until depleted
+            r = (d + r) % 16 | 0;
+            d = Math.floor(d / 16);
+        } else { //Use microseconds since page-load if supported
+            r = (d2 + r) % 16 | 0;
+            d2 = Math.floor(d2 / 16);
+        }
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+}
+
+function getPortCalled(req) {
+    const host = req.get('host');
+    var [hostname, port] = host.split(':');
+    if (port == undefined) {
+        if (req.prtocol == 'https') {
+            port = 443;
+        } else {
+            port = 80;
+        }
+    }
+    return port;
+}
+
+function checkForSpecialCharacter(text) {
+    const format = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/;
+    return format.test(text);
 }

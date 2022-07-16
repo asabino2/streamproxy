@@ -1,6 +1,8 @@
 *.jpg
+*.sh
 /bin/
 /resources/
+/docker/
 ./streamproxy.config.json
 compile*.bat
 /streamproxy.config.json
