@@ -668,6 +668,20 @@ xhr.send();
                         document.getElementById("logdiv").innerHTML = responseObj;
                         document.getElementById("createserverbutton").disabled = false;
                         
+                        if(xhr.status == 200){
+                        document.getElementById("streamname").value = "";
+                         document.getElementById("streammethod").value = "/videostream/streamlink";
+                         document.getElementById("streamdescription").value = "";
+                         document.getElementById("url").value = "";
+                         document.getElementById("ffmpeg_providerdiv").value = "";
+                         document.getElementById("ffmpeg_videoformat").value = "";
+                        document.getElementById("ffmpeg_videocodec").value = "";
+                        document.getElementById("ffmpeg_audiocodec").value = "";
+                        document.getElementById("ffmpeg_framesize").value = "";
+                        document.getElementById("ffmpeg_framerate").value = "";
+                        document.getElementById("channelnumber").value = "";
+                        document.getElementById("audiostream_title").value = "";
+                        }
                         
                    
                   };
@@ -713,7 +727,7 @@ xhr.send();
     <body>
       <div id="main">
       <center><h1>Create a Stream server</h1></center>
-      <h2><center>use this page to create a streamserver and serve this to n users (one thread will be created)<center></h2>
+      <h2><center>use this page to create a streamserver and serve it to multiple users (only one thread per stream server is created)<center></h2>
        
       
        
@@ -1308,7 +1322,7 @@ app.get('/api/streamserver/status', (req, res) => {
     if (auth.authenticated == false) {
         return false;
     }
-    var streamservername = req.query.servername;
+    var streamservername = req.query.streamname;
     var streamserverstatusfiltered = undefined;
     if (streamservername != undefined) {
         streamserverstatusfiltered = streamserverstatus.filter(val => val.streamname == streamservername);
@@ -1863,7 +1877,7 @@ app.get('/status', (req, res) => {
                   } else if (table.isStreamServer == true) {
                     htmlData += '<td><a href="http://${req.hostname}:${getPortCalled(req)}/streamserver/status?streamname='+table.streamArgs+'">http://${req.hostname}:${getPortCalled(req)}/play/'+table.streamArgs+'</a></td>';
                   } else {
-                     htmlData += '<td>${req.ip}</td>';
+                     htmlData += '<td>'+table.clientIP+'</td>';
                   }
                   htmlData += '<td>'+table.endpoint+'</td>';
                   htmlData += '<td>'+table.clientIP+'</td>';
@@ -2029,6 +2043,7 @@ app.get('/status/*', (req, res) => {
 
 
 app.get('/', (req, res) => {
+    res.set({ 'Server': 'streamproxy' });
     res.redirect("/about");
 });
 
@@ -2043,6 +2058,7 @@ app.get('/about', async function(req, res) {
     const serverreplacer = new RegExp(serversearch, 'g');
     const portreplacer = new RegExp(portsearch, 'g');
     const localhostreplacer = new RegExp(localhostsearch, 'g');
+    res.set({ 'Server': 'streamproxy' });
     appsetheader(res);
     https.get('https://raw.githubusercontent.com/asabino2/streamproxy/master/README.md', (resp) => {
         let data = '';
@@ -2271,7 +2287,7 @@ function getPageTitle(url) {
 }
 
 function appsetheader(res) {
-    res.set({ 'Server': 'streamproxy' });
+    //res.set({ 'Server': 'streamproxy' });
 }
 
 function checkToken(req, res) {
@@ -2747,6 +2763,7 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
 
 
     if (streamServerExist(streamserver) == true) {
+        res.statusMessage = `the stream server ${streamserver} already exists!`;
         res.status(500).send(`<h2> the stream server ${streamserver} already exists!</h2>`);
         return false;
     }
@@ -2899,7 +2916,8 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
             <p></p>
             <p> Message returned : <b><font color="red">${stderrmsg}</font></b></p>
             `
-            res.send(html);
+            res.statusMessage = "Error on creation a stream server";
+            res.status(500).send(html);
         }
 
     })
