@@ -14,7 +14,10 @@ var databuf = { header: [{ bytes: [] }], data: undefined };
 var databufheaderlen = 4;
 var mydatabuf = undefined;
 var streamserverstatus = [];
+var arrstreamserverlist = [];
+
 const { PassThrough } = require("stream").Duplex;
+//const { tunnelteste } = require("stream").Duplex;
 
 var arrstreamserver = []
 
@@ -29,7 +32,17 @@ const { application, response } = require('express');
 
 
 loadconfig();
+loadStreamServers();
 getInfo();
+
+/*
+process.stdin.resume();
+process.on('exit', function() {
+    console.log('Got SIGINT.  Press Control-D to exit.');
+    process.exit();
+});
+*/
+
 // Initialization of variables
 const app = express();
 var portlisten = process.argv[2];
@@ -46,6 +59,7 @@ app.use(bodyParser.raw());
 app.use(useragent.express());
 
 var pjson = require('../package.json');
+//const { isGeneratorFunction } = require('util/types');
 
 
 
@@ -54,7 +68,7 @@ console.log("\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\
 console.log("                                         A Proxy for the livestreams                   ")
 console.log(`                                             version ${pjson.version}                  `)
 console.log("                              Developed by Alexander Sabino (asabino2.github.io)       ")
-console.log("                                           Rio de Janeiro - Brazil1                     ")
+console.log("                                           Rio de Janeiro - Brazil                     ")
 
 
 
@@ -198,6 +212,9 @@ app.get('/videostream/ffmpeg', (req, res) => {
         ffmpegparams.push('service_name="' + service_name + '"');
 
     }
+
+
+
     if (vformat != undefined) {
         ffmpegparams.push('-f');
         ffmpegparams.push(vformat);
@@ -383,444 +400,28 @@ app.get('/videostream/displaytext', (req, res) => {
 })
 
 
+
+
 app.get('/streamserver/create', (req, res) => {
     var auth = basicAuth(req, res);
-    var port = req.query.port;
-    var html = "";
-    if (port == undefined) {
-        port = config.port + 1;
-    }
     if (auth.authenticated == false) {
         return false;
     }
-
-
-    html = `
-    <html>
-    <head>
-    <style>
-    
-    
-    
-    .label {
-      position: absolute;
-        /*left: 42%; */
-       
-    }
-    
-    .secondaryinput {
-      position: absolute;
-      /*  left: 42%; */
-       width: 800px;
-       height: 30px;
-       border-radius: 5px;
-       
-       
-    }
-    
-    
-    #main {
-      width: 100%;
-    }
-    
-    #forms {
-      position: relative;
-      top: 30px;
-      width:800px;
-      margin: auto;
-      
-    }
-    
-    
-    
-    #for_ffmpeg {
-      display: none;
-    }
-    
-    #for_audiostream {
-      display: none;
-    }
-    
-    #logdiv {
-        position: relative;
-        border:  1px solid black;
-        width: 1300px;
-        height: 500px;
-        margin: auto;
-        top: 200px;
-      }
-
-    #createserverbutton {
-                   /* transform: translatex(1180px) translatey(352px);*/
-                   /* min-height: 35px; */
-                     position: relative;
-                     width: 186px;
-                     
-                     
-                                 text-decoration: none;
-                                 border: none;
-                                 padding: 12px 40px;
-                                 font-size: 16px;
-                                 background-color: blue;
-                                 color: #fff;
-                                 border-radius: 5px;
-                                 box-shadow: 7px 6px 28px 1px rgba(0, 0, 0, 0.24);
-                                 cursor: pointer;
-                                 outline: none;
-                                 transition: 0.2s all;
-                             }
-                 
-                             #createserverbutton:active {
-                                 transform: scale(0.98);
-                                 
-                                 box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
-                                 
-                             } 
-                             #createserverbutton:disabled {
-                                background-color: gray;
-                             }  
-                             
-    </style>
-    <script>
-      function createserver(){
-       
-        var streamname = document.getElementById("streamname").value;
-        var streammethod = document.getElementById("streammethod").value;
-        var streamdescription = document.getElementById("streamdescription").value;
-        var url = document.getElementById("url").value;
-        var service_provider = document.getElementById("ffmpeg_providerdiv").value;
-        var videoformat = document.getElementById("ffmpeg_videoformat").value;
-        var videocodec = document.getElementById("ffmpeg_videocodec").value;
-        var audiocodec = document.getElementById("ffmpeg_audiocodec").value;
-        var framesize = document.getElementById("ffmpeg_framesize").value;
-        var framerate = document.getElementById("ffmpeg_framerate").value;
-        var channelnumber = document.getElementById("channelnumber").value;
-        var title = document.getElementById("audiostream_title").value;
-        var hasError = false;
-    
-        document.getElementById("streamname").style.borderColor = "black";
-          document.getElementById("streamdescription").style.borderColor = "black";
-          document.getElementById("url").style.borderColor = "black";
-          document.getElementById("channelnumber").style.borderColor = "black";
-    
-        if(streamdescription == ""){
-          streamdescription = streamname;
-        }
-    
-        if(checkForSpecialCharacter(streamdescription) == true){
-          alert("don't use special character in service description");
-          document.getElementById("streamdescription").style.borderColor = "red"
-          return false;
-        }
-    
-        if(checkForSpecialCharacter(streamname) == true){
-          alert("don't use special character in service name");
-          document.getElementById("streamname").style.borderColor = "red"
-          return false;
-        }
-    
-        if(onlyNumbers(channelnumber) == false && channelnumber != ""){
-          alert('in channel number field, use only numbers');
-          document.getElementById("channelnumber").style.borderColor = "red";
-          return false;
-        }
-    
-        var url = document.getElementById("url").value;
-        var urltocall = "";
-        
-        if(streamname == "" || streamname == undefined){
-          //alert('fill stream name field');
-          document.getElementById("streamname").style.borderColor = "red"
-          hasError = true;
-        } else {
-        
-          streamname = "&streamserver="+streamname
-        }
-    
-        if(videoformat == "" || videoformat == undefined){
-          videoformat = "" ;
-        } else {
-          videoformat = "&videoformat="+videoformat ;
-        }
-
-        if(framesize == "" || framesize == undefined){
-            framesize = "" ;
-          } else {
-            framesize = "&framesize="+framesize ;
-          }
-          
-          if(framerate == "" || framerate == undefined){
-            framerate = "" ;
-          } else {
-            framerate = "&framerate="+framerate ;
-          }
-          
-        if(streamdescription == "" || streamdescription == undefined){
-          streamdescription = "" ;
-        } else {
-          streamdescription = "&streamdescription="+streamdescription ;
-        }
-    
-        if(service_provider == "" || service_provider == undefined){
-          service_provider = "" ;
-        } else {
-          service_provider = "&serviceprovider="+service_provider ;
-        }
-    
-        if(channelnumber == "" || channelnumber == undefined){
-          channelnumber = "" ;
-          
-        } else {
-          channelnumber = "&chnumber="+channelnumber ;
-        }
-    
-        if(videocodec == "" || videocodec == undefined){
-          videocodec = "" ;
-          
-        } else {
-          videocodec = "&videocodec="+videocodec ;
-        }
-    
-        if(audiocodec == "" || audiocodec == undefined){
-          audiocodec = "" ;
-        } else {
-          audiocodec = "&audiocodec="+audiocodec ;
-        }
-    
-        if(title == "" || title == undefined){
-          title = "" ;
-        } else {
-          title = "&title="+title ;
-        }
-    
-        if(url == "" || url == undefined){
-          //alert('fill stream name field');
-          document.getElementById("url").style.borderColor = "red"
-          hasError = true;
-        }
-    
-        if(hasError == true){
-          alert('fill all required fields in red');
-          return false;
-        } 
-    
-    
-       if(streammethod != "/videostream/ffmpeg" && streammethod != "/videostream/play"){
-        videoformat = "";
-        service_provider = "";
-        
-        videocodec = "";
-        audiocodec = "";
-       }
-    
-       if(streammethod != "/videostream/ffmpeg" && streammethod != "/videostream/play" && streammethod != "/videostream/streamlink"){
-        channelnumber = "";
-    }
-
-       if(streammethod != "/audiostream/play"){
-         title = "";
-       } 
-    
-    
-       
-        urltocall = streammethod+"?url="+url+streamname+videoformat+streamdescription+service_provider+channelnumber+videocodec+framesize+framerate+audiocodec+title
-       
-        //alert("teste")
-       //window.location.href = urltocall;
-       document.getElementById("logdiv").innerHTML = "processing....";
-       document.getElementById("createserverbutton").disabled = true;
-       let xhr = new XMLHttpRequest();
-xhr.open('GET', urltocall);
-xhr.send();
-                xhr.onload = function() {
-                    let responseObj = xhr.response;
-                      
-                        logdiv = responseObj;
-                        document.getElementById("logdiv").innerHTML = responseObj;
-                        document.getElementById("createserverbutton").disabled = false;
-                        
-                        if(xhr.status == 200){
-                        document.getElementById("streamname").value = "";
-                         document.getElementById("streammethod").value = "/videostream/streamlink";
-                         document.getElementById("streamdescription").value = "";
-                         document.getElementById("url").value = "";
-                         document.getElementById("ffmpeg_providerdiv").value = "";
-                         document.getElementById("ffmpeg_videoformat").value = "";
-                        document.getElementById("ffmpeg_videocodec").value = "";
-                        document.getElementById("ffmpeg_audiocodec").value = "";
-                        document.getElementById("ffmpeg_framesize").value = "";
-                        document.getElementById("ffmpeg_framerate").value = "";
-                        document.getElementById("channelnumber").value = "";
-                        document.getElementById("audiostream_title").value = "";
-                        enabledisablefields()
-                        }
-                        
-                   
-                  };
-                  xhr.onerror = function(e) {
-                   console.log("error", e);
-                };
-        
-        //location.replace(urltocall)
-        
-      }
-      function enabledisablefields(){
-        var streammethod = document.getElementById("streammethod").value;
-        
-        if(streammethod == "/videostream/ffmpeg"){
-          document.getElementById("for_ffmpeg").style.display = 'block';
-        } else {
-          document.getElementById("for_ffmpeg").style.display = 'none';
-        }
-    
-        if(streammethod != '/audiostream/play'){
-          document.getElementById("for_videostream").style.display = 'block';
-          document.getElementById("for_audiostream").style.display = 'none';
-        } else {
-          document.getElementById("for_videostream").style.display = 'none';
-          document.getElementById("for_audiostream").style.display = 'block';
-        }
-    
-      
-      }
-    
-      function checkForSpecialCharacter(text){
-      //  const format = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/; // removed because javascript error
-   // return format.test(text);
-        //return false;
-    }
-    
-    function onlyNumbers(str) {
-      return /^[0-9]+$/.test(str);
-    }
-    
-    </script>
-    </head>
-    <body>
-      <div id="main">
-      <center><h1>Create a Stream server</h1></center>
-      <h2><center>use this page to create a streamserver and serve it to multiple users (only one thread per stream server is created)<center></h2>
-       
-      
-       
-        <div id="forms">
-    <!-- streamname -->
-          <div id="streamnamediv" > 
-        <label  for="streamname" class="label" id="teste">Streaming Name:</label><br>
-        <input id="streamname" name="streamname" class="secondaryinput" size="50"/><br /><br /><br />
-      </div>
-    <!-- stream description-->
-        <div id="streamdescriptiondiv" >
-           <label class="label">Stream Description (optional):</label> <br>
-        <input id="streamdescription" name="streamdescription" class="secondaryinput" size="50"/><br /><br /><br />
-      </div>
-    
-     <!-- stream method --> 
-        <div id="streammethoddiv" >
-          <label  class="label">Streaming Method:</label> <br>
-        <select id="streammethod" name="streammethod" class="secondaryinput" onchange = "enabledisablefields()">
-          <option value="/videostream/streamlink">Videostream (streamlink)</option>
-          <option value="/videostream/ffmpeg">Videostream (ffmpeg)</option>`
-
-    if (info.platform != "win32") {
-        html += `<option value="/videostream/play">Videostream (streamlink+ffmpeg)</option>`
-    }
-    html += `<option value="/audiostream/play"
-        >convert videostream to audiostream</option
-      >
-    </select><br /><br />   <br>
-  </div>
-
-  <div id="for_ffmpeg">
-  <!-- FFMPEG:streamprovider-->  
-  <div id="ffmpeg_providerdiv" >
-      <label class="label">Provider (optional):</label> <br>
-   <input id="ffmpeg_provider" name="ffmpeg_provider" class="secondaryinput" size="50"/><br /><br /><br />
-  </div> 
-<!-- FFMPEG:video format-->
-  <div id="ffmpeg_videoformatdiv" >
-      <label class="label">Video Format (optional):</label> <br>
-   <input id="ffmpeg_videoformat" name="ffmpeg_videoformat" class="secondaryinput" size="50"/><br /><br /><br />
-  </div>    
-
-<!-- FFMPEG:vcodec-->
-<div id="ffmpeg_videocodecdiv" >
-    <label class="label">Video Codec (optional):</label> <br>
- <input id="ffmpeg_videocodec" name="ffmpeg_videocodec" class="secondaryinput" size="50"/><br /><br /><br />
-</div>  
-
-<!-- FFMPEG:framesize-->
-<div id="ffmpeg_framesizediv" >
-    <label class="label">Frame Size:</label> <br>
-    <select id="ffmpeg_framesize" name="ffmpeg_framesize" class="secondaryinput" ">
-    <option value="">Auto (copy from original video)</option>
-    <option value="320x240">320x240</option>
-    <option value="720x480">480p</option>
-    <option value="1280x720">720p (HD)</option>
-    <option value="1920x1080">1080p (fullhd)</option>
-    <option value="2560x1440">QUAD HD</option>
-    <option value="3840x2160">4K</option>
-    <option value="7680x4320">8K</option>
-    <option value="15360x8640">16K</option>
-
-</select><br /><br />   <br>
-</div> 
-
-<!-- FFMPEG:framerate-->
-<div id="ffmpeg_frameratediv" >
-    <label class="label">Framerate:</label> <br>
-    <select id="ffmpeg_framerate" name="ffmpeg_framerate" class="secondaryinput" ">
-    <option value="">Auto (copy from original video)</option>
-    <option value="10">10fps</option>
-    <option value="15">15fps</option>
-    <option value="24">24fps</option>
-    <option value="25">25fps</option>
-    <option value="29.97">29.97fps</option>
-    <option value="30">30fps</option>
-    <option value="59.97">59.97fps</option>
-    <option value="60">60fps</option>
-
-</select><br /><br />   <br>
-</div> 
-
-<!-- FFMPEG:acodec-->
-<div id="ffmpeg_audiocodecdiv" >
-    <label class="label">Audio Codec (optional):</label> <br>
- <input id="ffmpeg_audiocodec" name="ffmpeg_audiocodec" class="secondaryinput" size="50"/><br /><br /><br />
-</div>
-</div>
-
-<div id="for_videostream">
-<div id="channelnumberdiv">
-    <label class="label">Channel Number (optional):</label> <br>
- <input id="channelnumber" name="channelnumber" class="secondaryinput" size="50"/><br /><br /><br />
-</div>
-</div>    
-
-<div id="for_audiostream">
-<div id="audiostream_titlediv">
-    <label class="label">Title (optional):</label> <br>
- <input id="audiostream_title" name="audiostream_title" class="secondaryinput" size="50"/><br /><br /><br />    
-</div>
-</div>
-
-    <!-- url --> 
-   <div id="urldiv"> 
-     <label  class="label">Url:</label><br>
-    <input id="url" name="url" size="50" id="urllabel" placeholder="URL to stream" class="secondaryinput"/><br /><br><br />
-    <center><button onclick="createserver()" id="createserverbutton" >Create Server</button></center>
-  </div>
-
-  </div> 
-  <div id="logdiv">
-  
-    </div>  
-</div> 
-</body>
-</html>`
-    res.send(html);
-
+    mountStreamServerAdminPage(req, res);
 })
+
+app.get('/streamserver/edit', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
+    var streamserverlistIndex = arrstreamserverlist.findIndex(val => val.streamname === req.query.streamname);
+    if (streamserverlistIndex < 0) {
+        res.status(404).send("<h2>Stream server not found</h2>");
+    } else {
+        mountStreamServerAdminPage(req, res, "PUT", arrstreamserverlist[streamserverlistIndex]);
+    }
+});
 
 app.get('/streamserver/status', (req, res) => {
     var auth = basicAuth(req, res);
@@ -828,107 +429,20 @@ app.get('/streamserver/status', (req, res) => {
         return false;
     }
 
-    appsetheader(res);
+    //appsetheader(res);
     var catsize = 'KB';
     var datasize = 0;
 
     var data = "";
     data += `<html>
             <head> 
-            <style>
-            table {
-            border-collapse: collapse;
-            width: 100%;
-            }
-            th, td {
-            padding: 8px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-            }
-            tr:hover {background-color:#f5f5f5;}
-            th {
-                 background-color: #ddd;
-               }
-
-               /* Start of toast */  
-               #snackbar {
-                 visibility: hidden;
-                 min-width: 250px;
-                 margin-left: -125px;
-                 background-color: #333;
-                 color: #fff;
-                 text-align: center;
-                 border-radius: 2px;
-                 padding: 16px;
-                 position: fixed;
-                 z-index: 1;
-                 left: 50%;
-                 bottom: 30px;
-                 font-size: 17px;
-               }
-               
-               #snackbar.show {
-                 visibility: visible;
-                 -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
-                 animation: fadein 0.5s, fadeout 0.5s 2.5s;
-               }
-           
-               /* kill button */
-               #killbutton {
-                text-decoration: none;
-                border: none;
-                padding: 12px 40px;
-                font-size: 16px;
-                background-color: red;
-                color: #fff;
-                border-radius: 5px;
-                box-shadow: 7px 6px 28px 1px rgba(0, 0, 0, 0.24);
-                cursor: pointer;
-                outline: none;
-                transition: 0.2s all;
-            }
-            /* Adding transformation when the button is active */
-              
-            #killbutton:active {
-                transform: scale(0.98);
-                /* Scaling button to 0.98 to its original size */
-                box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
-                /* Lowering the shadow */
-            }
-            /* kill button end */
-               
-               @-webkit-keyframes fadein {
-                 from {bottom: 0; opacity: 0;} 
-                 to {bottom: 30px; opacity: 1;}
-               }
-               
-               @keyframes fadein {
-                 from {bottom: 0; opacity: 0;}
-                 to {bottom: 30px; opacity: 1;}
-               }
-               
-               @-webkit-keyframes fadeout {
-                 from {bottom: 30px; opacity: 1;} 
-                 to {bottom: 0; opacity: 0;}
-               }
-               
-               @keyframes fadeout {
-                 from {bottom: 30px; opacity: 1;}
-                 to {bottom: 0; opacity: 0;}
-               }
-               /* end of toast */                   
-
-            </style>
-            <script>;
-           
-
-             function displayToast(color,text) {
-                var x = document.getElementById("snackbar");
-                x.className = "show";
-                x.innerHTML = text;
-                x.style.backgroundColor = color;
-                setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
-              }
+            <link rel="stylesheet" href="/styles.css">
+            <link rel="stylesheet" href="/toast.css">
+            <script>
+             var lasttotalitems = 0;
+             /* common functions */
+             ${commonFrontendFunctionsGet()}
+          
 
               function getStatusData(){
                 
@@ -960,10 +474,11 @@ app.get('/streamserver/status', (req, res) => {
 
               function mountStatus(responseObj) {
                 var htmlData = "";
+                if(lasttotalitems != responseObj.length || document.getElementById("status").innerHTML == ""){
+                    lasttotalitems = responseObj.length;
                 htmlData += "<table>";
                 htmlData += "<tr>";
                 htmlData += "<th>UUID</th>";
-                htmlData += "<th>PID</th>";
                 htmlData += "<th>Streamname</th>";
                 htmlData += "<th>user</th>";
                 htmlData += "<th>IP</th>";
@@ -978,7 +493,6 @@ app.get('/streamserver/status', (req, res) => {
                   htmlData += '<tr>';
                   
                   htmlData += '<td>'+table.UUID+'</td>';
-                  htmlData += '<td>'+table.pid+'</td>';
                   htmlData += '<td>'+table.streamname+'</td>';
                   htmlData += '<td>'+table.user+'</td>';
                   htmlData += '<td>'+table.client.ip+'</td>';
@@ -995,6 +509,7 @@ app.get('/streamserver/status', (req, res) => {
                 htmlData += '</body>';
                 htmlData += '</html>';
                 document.getElementById("status").innerHTML = htmlData;
+            }
             }
 
               function startTimer() {
@@ -1031,29 +546,33 @@ app.get('/streamserver/playlist.m3u', (req, res) => {
     var channelname = "";
     var channelnumber = "";
     var radio = "";
-
+    var arrstreamserverlistnew = getStreamServersListData();
+    if (config.streamserver.hideStoppedStreamServerInPlaylist == true) {
+        arrstreamserverlistnew = arrstreamserverlistnew.filter(val => val.status === "running");
+    }
     playlistdata += "#EXTM3U\n";
-    arrstreamserver.forEach(val => {
-        if (val.chnumber != undefined && val.chnumber != "") {
-            channelnumber = `tvg-chno="${val.chnumber}"`;
-        }
-        if (val.serverdescription != undefined && val.serverdescription != "") {
-            channelname = val.serverdescription
-        } else {
-            channelname = val.servername
-        }
+    if (arrstreamserverlistnew.length > 0) {
+        arrstreamserverlistnew.forEach(val => {
+            if (val.channelnumber != undefined && val.channelnumber != "") {
+                channelnumber = `tvg-chno="${val.channelnumber}"`;
+            }
+            if (val.streamdescription != undefined && val.streamdescription != "") {
+                channelname = val.streamdescription
+            } else {
+                channelname = val.streamname
+            }
 
-        if (val.radio == true) {
-            radio = "radio=true";
-        }
-        playlistdata += `#EXTINF:-1 ${channelnumber} ${radio}, ${channelname}\n`;
-        if (userpassword != undefined && userpassword != "") {
-            playlistdata += `http://${userpassword}@${req.hostname}:${getPortCalled(req)}/play/${val.servename}\n`
-        } else {
-            playlistdata += `http://${req.hostname}:${getPortCalled(req)}/play/${val.servername}\n`
-        }
-    })
-
+            if (val.type == "radio") {
+                radio = "radio=true";
+            }
+            playlistdata += `#EXTINF:-1 ${channelnumber} ${radio}, ${channelname}\n`;
+            if (userpassword != undefined && userpassword != "") {
+                playlistdata += `http://${userpassword}@${req.hostname}:${getPortCalled(req)}/play/${val.streamname}\n`
+            } else {
+                playlistdata += `http://${req.hostname}:${getPortCalled(req)}/play/${val.streamname}\n`
+            }
+        })
+    }
     res.set({ 'Content-Type': 'application/octet-stream' });
     res.send(playlistdata);
 });
@@ -1090,7 +609,7 @@ app.get('/videostream/restream', (req, res) => {
     }
 
 
-    appsetheader(res);
+    //appsetheader(res);
 
     url = req.query.url;
 
@@ -1263,16 +782,33 @@ app.get('/play/*', (req, res) => {
 
     var streamname = req.path;
     var UUID = generateUUID();
-    streamname = streamname.substring(streamname.lastIndexOf('/') + 1);
+    var arrstreamserverlistIndex = 0;
 
-    var arrstreamserverfilter = arrstreamserver.filter(value => value.servername == streamname);
-    if (arrstreamserverfilter.length <= 0) {
+    streamname = streamname.substring(streamname.lastIndexOf('/') + 1);
+    arrstreamserverlistIndex = arrstreamserverlist.findIndex(val => val.streamname === streamname);
+    var arrstreamserverfilter = arrstreamserver.filter(value => value.streamname == streamname);
+    if (arrstreamserverlistIndex < 0) {
         res.status(404).send("no stream server has created with name " + streamname);
         return false;
     }
+    if (getStreamServerListSingle(streamname).status != "running") {
+        if (config.streamserver.startOnInvoke == true) {
+            startStreamServer(streamname, req);
+        } else {
+            res.statusMessage = "Stream Server " + streamname + " is not running, start before play"
+            res.status(500).end();
+            return false;
+        }
+    }
     addStreamServerStatus(req, auth, streamname, UUID);
-    var mytunnel = arrstreamserverfilter[0].tunnel;
-    mytunnel.pipe(res);
+
+    try {
+        var mytunnel = arrstreamserverfilter[0].tunnel;
+        mytunnel.pipe(res);
+    } catch (e) {
+        res.statusMessage = "error on playing streamserver " + streamname + " (probably not running), e: " + e.message;
+        res.status(500).end();
+    }
 
     req.on('close', () => { // on connection close, kill PID of app
         removeStreamServerStatus(UUID);
@@ -1312,7 +848,7 @@ app.get('/api/streaminfo', (req, res) => {
         return false;
     }
 
-    appsetheader(res);
+    //appsetheader(res);
     url = req.query.url;
 
     url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
@@ -1343,6 +879,162 @@ app.get('/api/streaminfo', (req, res) => {
     }
 });
 
+app.get('/api/streamserver', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
+    res.json(getStreamServersListData());
+});
+
+app.post('/api/streamserver', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
+    var mystreamserver = req.body;
+
+    var mystreamserverindex = arrstreamserverlist.findIndex(value => value.streamname === mystreamserver.streamname);
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Access-Control-Allow-Credentials', true);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH');
+    if (mystreamserver.streammethod == "/audiostream/play") {
+        mystreamserver.type = "radio";
+    } else {
+        mystreamserver.type = "tv";
+    }
+
+    if (mystreamserverindex < 0) {
+        arrstreamserverlist.push(mystreamserver);
+        log("Streamserver " + mystreamserver.streamname + " has created")
+        res.json({ streamadded: true, message: "Streamserver " + mystreamserver.streamname + " has created" });
+        saveStreamServers();
+        startStreamServer(mystreamserver.streamname, req)
+    } else {
+        log("error on trying to stop: streamserver " + mystreamserver.streamname + " already exists, choose another name")
+        res.statusMessage = "Streamserver " + mystreamserver.streamname + " already exists, choose another name"
+        res.status(500).json({ streamadded: false, message: "Streamserver " + mystreamserver.streamname + " already exists, choose another name" });
+    }
+
+
+});
+
+app.put('/api/streamserver', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
+    var mystreamserver = req.body;
+    log(`streamserver ${mystreamserver.streamname} change requested from ${req.ip}, json data: ${JSON.stringify(mystreamserver)}`)
+    var mystreamserverindex = arrstreamserverlist.findIndex(value => value.streamname === mystreamserver.streamname);
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Access-Control-Allow-Credentials', true);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH');
+    if (mystreamserver.streammethod != "/audiostream/play") {
+        mystreamserver.type = "tv";
+    } else {
+        mystreamserver.type = "radio";
+    }
+
+    if (mystreamserverindex >= 0) {
+        /* save the existent fields */
+        for (var key in mystreamserver) {
+            if (mystreamserver[key] != undefined) {
+                arrstreamserverlist[mystreamserverindex][key] = mystreamserver[key];
+                log(`field ${key} changed to ${mystreamserver[key]}`)
+            }
+        }
+        //arrstreamserverlist[mystreamserverindex] = mystreamserver
+        log("Streamserver " + mystreamserver.streamname + " has changed")
+        saveStreamServers();
+        stopStreamServer(mystreamserver.streamname);
+        //startStreamServer(mystreamserver.streamname);
+        if (getStreamServerListSingle(mystreamserver.streamname).status == "running") {
+            setTimeout(startStreamServer, 5000, mystreamserver.streamname, req);
+        } else {
+            startStreamServer(mystreamserver.streamname, req);
+        }
+        res.json({ streamchanged: true, message: "Streamserver " + mystreamserver.streamname + " has changed" });
+    } else {
+        log("error on trying to change: Streamserver " + mystreamserver.streamname + " not exists")
+        res.statusMessage = "Streamserver " + mystreamserver.streamname + " not exists";
+        res.status(500).json({ streamchanged: false, message: "Streamserver " + mystreamserver.streamname + " not exists" });
+    }
+});
+
+app.delete('/api/streamserver', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
+    var mystreamserver = req.body;
+    var mystreamserverindex = arrstreamserverlist.findIndex(value => value.streamname === mystreamserver.streamname);
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Access-Control-Allow-Credentials', true);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE');
+
+    if (mystreamserverindex >= 0) {
+
+        stopStreamServer(mystreamserver.streamname);
+        arrstreamserverlist = arrstreamserverlist.filter(value => value.streamname != mystreamserver.streamname);
+        saveStreamServers();
+        res.json({ streamdeleted: true, message: "Streamserver " + mystreamserver.streamname + " has deleted" });
+    } else {
+        log("error on trying to deleted: Streamserver " + mystreamserver.streamname + " not exists")
+        res.statusMessage = "Streamserver " + mystreamserver.streamname + " not exists";
+        res.status(500).json({ streamdeleted: false, message: "Streamserver " + mystreamserver.streamname + " not exists" });
+    }
+})
+
+
+app.post('/api/streamserver/start', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
+    var body = req.body;
+
+    if (body.streamname != "*") {
+        var response = startStreamServer(body.streamname, req);
+    } else {
+        startAllStreamServers(req);
+        var response = {};
+        response.statusMessage = "all stream servers has started";
+        response.status = 200;
+        response.json = { status: "started", message: "all streamservers started" }
+    }
+
+    res.statusMessage = response.statusMessage;
+    res.status(response.status).json(response.json);
+})
+
+app.post('/api/streamserver/stop', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
+
+    if (req.body.streamname != "*") {
+        var response = stopStreamServer(req.body.streamname);
+    } else {
+        stopAllStreamServers();
+        var response = {};
+        response.statusMessage = "all stream servers has stopped";
+        response.message = "all stream servers has stopped";
+        response.status = "stopped";
+    }
+    if (response.status != "stopped") {
+        res.statusMessage = "Error on stopping stream server";
+        res.status(500).json(response);
+    } else {
+        res.json(response);
+    }
+
+});
+
 // Check stream: http://<ip>:<port>?url=<url>
 app.get('/api/checkstream', (req, res) => {
     if (checkToken(req, res) == false) {
@@ -1354,7 +1046,7 @@ app.get('/api/checkstream', (req, res) => {
         return false;
     }
 
-    appsetheader(res);
+    //appsetheader(res);
     url = req.query.url;
     url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
 
@@ -1446,18 +1138,11 @@ app.get('/log', (req, res) => {
     }
     var htmldata = "";
     htmldata += `<header>
-    <style>
-      textarea {
-        border: 1px solid #999999;
-        width: 100%;
-        height: 95%;
-        margin: 5px 0;
-        padding: 3px;
-        resize: none;
-      }
-    </style>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/toast.css">
     <script>
-      let lineslog = 0;
+      
+    let lineslog = 0;
       let lastline = 0;
       let initialized = false;
       var textarea = document.getElementById('log');
@@ -1540,7 +1225,7 @@ app.get('/log', (req, res) => {
                    });
         }
        
-     
+     ${commonFrontendFunctionsGet()}
     </script>
   </header>
   <body onload="startTimer()">
@@ -1561,6 +1246,12 @@ app.get('/log', (req, res) => {
     res.send(htmldata)
 })
 
+app.get('/teste', (req, res) => {
+    res.send(req.headers.authorization);
+    //req.pipe(tunnelteste);
+})
+
+
 
 app.post('/api/killProcess', (req, res) => {
 
@@ -1580,7 +1271,7 @@ app.post('/api/killProcess', (req, res) => {
     try {
         killProcesses(req.body.PID);
 
-        res.status(200).send("requested the SO to kill process " + req.body.PID);
+        res.status(200).json({ message: "requested the SO to kill process " + req.body.PID });
     } catch (e) {
         res.statusMessage = e.message;
         res.status(500).send("error on kill process " + req.body.PID + ", error: " + e.message);
@@ -1627,98 +1318,18 @@ app.get('/status', (req, res) => {
         return false;
     }
 
-    appsetheader(res);
+    //appsetheader(res);
     var catsize = 'KB';
     var datasize = 0;
 
     var data = "";
     data += `<html>
             <head> 
-            <style>
-            table {
-            border-collapse: collapse;
-            width: 100%;
-            }
-            th, td {
-            padding: 8px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-            }
-            tr:hover {background-color:#f5f5f5;}
-            th {
-                 background-color: #ddd;
-               }
-
-               /* Start of toast */  
-               #snackbar {
-                 visibility: hidden;
-                 min-width: 250px;
-                 margin-left: -125px;
-                 background-color: #333;
-                 color: #fff;
-                 text-align: center;
-                 border-radius: 2px;
-                 padding: 16px;
-                 position: fixed;
-                 z-index: 1;
-                 left: 50%;
-                 bottom: 30px;
-                 font-size: 17px;
-               }
-               
-               #snackbar.show {
-                 visibility: visible;
-                 -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
-                 animation: fadein 0.5s, fadeout 0.5s 2.5s;
-               }
-           
-               /* kill button */
-               #killbutton {
-                text-decoration: none;
-                border: none;
-                padding: 12px 40px;
-                font-size: 16px;
-                background-color: red;
-                color: #fff;
-                border-radius: 5px;
-                box-shadow: 7px 6px 28px 1px rgba(0, 0, 0, 0.24);
-                cursor: pointer;
-                outline: none;
-                transition: 0.2s all;
-            }
-            /* Adding transformation when the button is active */
-              
-            #killbutton:active {
-                transform: scale(0.98);
-                /* Scaling button to 0.98 to its original size */
-                box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
-                /* Lowering the shadow */
-            }
-            /* kill button end */
-               
-               @-webkit-keyframes fadein {
-                 from {bottom: 0; opacity: 0;} 
-                 to {bottom: 30px; opacity: 1;}
-               }
-               
-               @keyframes fadein {
-                 from {bottom: 0; opacity: 0;}
-                 to {bottom: 30px; opacity: 1;}
-               }
-               
-               @-webkit-keyframes fadeout {
-                 from {bottom: 30px; opacity: 1;} 
-                 to {bottom: 0; opacity: 0;}
-               }
-               
-               @keyframes fadeout {
-                 from {bottom: 30px; opacity: 1;}
-                 to {bottom: 0; opacity: 0;}
-               }
-               /* end of toast */                   
-
-            </style>
-            <script>;
+            <link rel="stylesheet" href="/styles.css">
+            <link rel="stylesheet" href="/toast.css">
+            <script>
+            var totallines = 0;
+                var totallinesant = 0;
             function killProcess(PID){
             var killProcessHTML = "";
             var status = 0;
@@ -1789,6 +1400,10 @@ app.get('/status', (req, res) => {
 
               function mountStatus(responseObj) {
                 var htmlData = "";
+                var index = 0;
+                totallines = responseObj.length;
+                if(totallines != totallinesant || document.getElementById("status").innerHTML == ""){
+                    totallinesant = totallines;
                 htmlData += "<table>";
                 htmlData += "<tr>";
                 htmlData += "<th>PID</th>";
@@ -1796,27 +1411,20 @@ app.get('/status', (req, res) => {
                 htmlData += "<th>Output</th>";
                 htmlData += "<th>Endpoint</th>";
                 htmlData += "<th>Client</th>";
-                htmlData += " <th>Data Transferred</th>";
+                htmlData += "<th>Avg. Data Transfer</th>";
                 htmlData += "<th>User</th>";
                 htmlData += "<th>Command</th>";
                 htmlData += "<th></th>";
                 htmlData += "</tr>";
+                
                 responseObj.forEach(function(table) {
                   datasize = table.dataSize;
-                  if (datasize > 1024) {
-                      datasize = datasize / 1024;
-                      catsize = 'MB';
-                  }
-                  if (datasize > 1024) {
-                      datasize = datasize / 1024;
-                      catsize = 'GB';
-                  }
-                  datasize = datasize.toFixed(3);
-                  htmlData += '<tr>';
+                  
+                  htmlData += '<tr id="'+table.PID+'">';
                   if(table.childprocess.length == 0){
-                  htmlData += '<td>'+table.PID+'</td>';
+                  htmlData += '<td id="'+index+':PID">'+table.PID+'</td>';
                   } else {
-                   htmlData += '<td><a href="./status/'+table.PID+'">'+table.PID+'</a></td>';  
+                   htmlData += '<td id="'+table.PID+':PID"><a href="./status/'+table.PID+'">'+table.PID+'</a></td>';  
                   }
                   htmlData += '<td>'+table.url+'</td>';
                   if(table.streamlinkserver == true){
@@ -1824,44 +1432,412 @@ app.get('/status', (req, res) => {
                   } else if (table.restream == true) {
                     htmlData += '<td>'+table.streamArgs+'</td>';
                   } else if (table.isStreamServer == true) {
-                    htmlData += '<td><a href="http://${req.hostname}:${getPortCalled(req)}/streamserver/status?streamname='+table.streamArgs+'">http://${req.hostname}:${getPortCalled(req)}/play/'+table.streamArgs+'</a></td>';
+                    htmlData += '<td><a href="http://${req.hostname}:${getPortCalled(req)}/streamserver/status?streamname='+table.streamservername+'">http://${req.hostname}:${getPortCalled(req)}/play/'+table.streamArgs+'</a></td>';
                   } else {
                      htmlData += '<td>'+table.clientIP+'</td>';
                   }
                   htmlData += '<td>'+table.endpoint+'</td>';
                   htmlData += '<td>'+table.clientIP+'</td>';
                   if(table.streamlinkserver == false && table.restream == false){
-                      htmlData += '<td>'+datasize+' '+catsize+'</td>';
+                      htmlData += '<td id="'+table.PID+':datasize">'+formatDataSize(datasize)+'</td>';
                   } else {
-                      htmlData += '<td>none</td>';
+                      htmlData += '<td id="'+table.PID+':datasize">none</td>';
                   }
                   htmlData += '<td>'+table.user+'</td>';
                   htmlData += '<td>'+table.command+'</td>';
                   htmlData += '<td><button onclick="killProcess('+table.PID+')" id="killbutton">kill process</button></td>';
                   htmlData += '</tr>';
+                 
                 });
                 htmlData += '</table>';
+           
+            
                 htmlData += '</body>';
                 htmlData += '</html>';
                 document.getElementById("status").innerHTML = htmlData;
+            } else {
+                index = 0;
+                responseObj.forEach(function(table) {
+                   
+                    document.getElementById(table.PID+":datasize").innerHTML = formatDataSize(table.dataSize);
+                    index++;
+                });
             }
+        }
 
               function startTimer() {
                 getStatusData();
                 setInterval(getStatusData, 1000);  
             }
+
+            function formatDataSize(datasize){
+                var catsize = "";
+                if (datasize > 1024) {
+                    datasize = datasize / 1024;
+                    catsize = 'MB';
+                }
+                if (datasize > 1024) {
+                    datasize = datasize / 1024;
+                    catsize = 'GB';
+                }
+                datasize = datasize.toFixed(3);
+                return datasize+' '+catsize;
+            } 
+             
+            function teste(){
+                document.getElementById("0:PID").innerHTML = "NULL";
+            }
               
-               
+            ${commonFrontendFunctionsGet()}   
 
             </script>   
             </head>
             <body onload="startTimer()">
+            
             <div id="status"></div>
             <div id="snackbar">Some text some message..</div>
             `
 
     res.send(data);
 })
+
+app.get('/streamserver/list', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false) {
+        return false;
+    }
+
+    //appsetheader(res);
+    var catsize = 'KB';
+    var datasize = 0;
+
+    var data = "";
+    var data = `<html>
+    <head> 
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/toast.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+    <script>
+    var totallines = 0;
+        var totallinesant = 0;
+    function startStreamServer(streamname){
+    
+    var statusData = undefined;
+    
+        try{
+            ProcessHTML = fetch('/api/streamserver/start', {
+            headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': '${req.headers.authorization}'
+             },
+              method: 'POST',
+              body: JSON.stringify({streamname: streamname})
+             }).then(response =>{
+               
+                if(response.status == 200){
+                
+                displayToast("green","StreamServer "+streamname+" has started");
+               }
+               else{
+                displayToast("red","error HTTP "+response.status+" "+response.statusText);
+               }
+               
+               
+               
+               });
+            
+             
+             
+    }
+    catch (e) {
+        displayToast("red","error: "+e.message);
+    }
+     }
+
+     function stopStreamServer(streamname){
+    
+        var statusData = undefined;
+        
+            try{
+                ProcessHTML = fetch('/api/streamserver/stop', {
+                headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'Authorization': '${req.headers.authorization}'
+                 },
+                  method: 'POST',
+                  body: JSON.stringify({streamname: streamname})
+                 }).then(response =>{
+                   
+                    if(response.status == 200){
+                    
+                    displayToast("green","StreamServer "+streamname+" has stopped");
+                   }
+                   else{
+                    displayToast("red","error HTTP "+response.status+" "+response.statusText);
+                   }
+                   
+                   
+                   
+                   });
+                
+                 
+                 
+        }
+        catch (e) {
+            displayToast("red","error: "+e.message);
+        }
+         }
+
+
+         function deleteStreamServer(streamname){
+    
+            var statusData = undefined;
+            if(confirm('Are you sure you want to delete the stream server '+streamname+'?')){
+                try{
+                    ProcessHTML = fetch('/api/streamserver', {
+                    headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'Authorization': '${req.headers.authorization}'
+                     },
+                      method: 'DELETE',
+                      body: JSON.stringify({streamname: streamname})
+                     }).then(response =>{
+                       
+                        if(response.status == 200){
+                        
+                        displayToast("green","StreamServer "+streamname+" has deleted");
+                       }
+                       else{
+                        displayToast("red","error HTTP "+response.status+" "+response.statusText);
+                       }
+                       
+                       
+                       
+                       });
+                    
+                     
+                     
+            }
+            catch (e) {
+                displayToast("red","error: "+e.message);
+            }
+        }
+             }
+
+
+     function downloadPlaylist(){
+        document.location = '/streamserver/playlist.m3u';
+     }
+
+     function addStreamServer(){
+        document.location = '/streamserver/create';
+     }
+
+     function editStreamServer(streamname){
+        document.location = '/streamserver/edit?streamname='+streamname;
+     }
+
+
+
+     function displayToast(color,text) {
+        var x = document.getElementById("snackbar");
+        x.className = "show";
+        x.innerHTML = text;
+        x.style.backgroundColor = color;
+        setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
+      }
+
+      function getStatusData(){
+        
+        const date = new Date();
+        var datasize = 0;
+        
+        let xhr = new XMLHttpRequest();
+        xhr.open('GET', '/api/streamserver');
+        xhr.responseType = 'json';
+        xhr.send();
+        xhr.onload = function() {
+            let responseObj = xhr.response;
+              
+                mountStatus(responseObj);
+                
+                
+            
+           
+          };
+          
+
+      
+      }
+
+
+      function getStreamTypeIcon(streamtype){
+        if(streamtype == "radio"){
+            return '<i class="fa fa-music"></i>';
+        } else {
+           return '<i class="fa fa-tv"></i>';
+        }
+      }
+      function mountStatus(responseObj) {
+        var htmlData = "";
+        var index = 0;
+        var streamserversRunning = undefined;
+        var streamserversStopped = undefined;
+        var totalstarted = 0;
+        var totalstopped = 0;
+        var streamserversRunning = responseObj.filter(val => val.status === "running");
+            var streamserversStopped = responseObj.filter(val => val.status === "stopped");
+            totalstarted = streamserversRunning.length;
+            totalstopped = streamserversStopped.length;
+
+        totallines = responseObj.length;
+        if(totallines != totallinesant || document.getElementById("status").innerHTML == ""){
+            totallinesant = totallines;
+           
+            
+   
+        htmlData += "<table>";
+        htmlData += "<tr>";
+        htmlData += "<th> </th>";
+        htmlData += "<th>Stream Name</th>";
+        htmlData += "<th>Channel Number</th>";
+        htmlData += "<th>Description</th>";
+        htmlData += "<th>URL</th>";
+        htmlData += "<th>Type</th>";
+        htmlData += "<th>Endpoint</th>";
+        htmlData += "<th>Status</th>";
+        htmlData += "<th>Avg. Data Transfer</th>";
+        htmlData += "<th>Connections</th>";
+        htmlData += "<th>Command</th>";
+        htmlData += "<th></th>";
+        htmlData += "</tr>";
+        
+        responseObj.forEach(function(table) {
+            var streamname = '\\''+table.streamname+'\\'';
+            datasize = table.dataSize;
+          
+          htmlData += '<tr id="'+table.streamname+'">';
+          if(table.logourl != "" && table.logourl != undefined) {
+          htmlData += '<td> <div id="'+table.streamname+':logourl"><img src="'+table.logourl+'" width="60" height="60"/></div></td>';
+          } else {
+            htmlData += '<td width="60"> </td>';
+          }
+          htmlData += '<td >'+table.streamname+'</td>';
+          htmlData += '<td id="'+table.streamname+':channelnumber">'+table.channelnumber+'</td>';
+          htmlData += '<td id="'+table.streamname+':streamdescription">'+table.streamdescription+'</td>';
+          htmlData += '<td id="'+table.streamname+':url">'+table.url+'</td>';
+       
+          htmlData += '<td id="'+table.streamname+':type">'+getStreamTypeIcon(table.type) + '</td>';
+          htmlData += '<td id="'+table.streamname+':streammethod">'+table.streammethod+'</td>';
+          if(table.status == "running"){
+            htmlData += '<td id="'+table.streamname+':status"> <div  class="label-status label-status-green">running</div></td>';
+          } else {
+            htmlData += '<td id="'+table.streamname+':status"> <div  class="label-status label-status-red">stopped</div></td>';
+          }
+          htmlData += '<td id="'+table.streamname+':datasize">'+table.dataTransfered+'</td>';
+          htmlData += '<td ><a href="/streamserver/status?streamname='+table.streamname+'"><div id="'+table.streamname+':connections">'+table.connections+'</div></a></td>';
+          htmlData += '<td>'
+          htmlData += '<button onclick="startStreamServer('+streamname+')" id="'+table.streamname+':start" class="listbutton listbutton-green"><i class="fa fa-play space-right"></i> Start</button>  '
+          htmlData += '<button onclick="stopStreamServer('+streamname+')" id="'+table.streamname+':stop" class="listbutton listbutton-red"><i class="fa fa-stop space-right"></i> Stop</button>  '
+          htmlData += '<button onclick="editStreamServer('+streamname+')" id="'+table.streamname+':edit" class="listbutton listbutton-blue"><i class="fa fa-edit"></i> Edit</button>  '
+          htmlData += '<button onclick="deleteStreamServer('+streamname+')" id="'+table.streamname+':delete" class="listbutton listbutton-red"><i class="fa fa-trash-alt"></i> Delete</button>  '
+          htmlData += '</td>';
+          htmlData += '</tr>';
+         
+        });
+        if(totallines == 0){
+            document.getElementById("startAll").disabled = true;
+            document.getElementById("stopAll").disabled = true;
+            document.getElementById("downloadPlaylist").disabled = true;
+        } else {
+           
+            document.getElementById("downloadPlaylist").disabled = false;
+        }
+        htmlData += '</table>';
+   
+    
+        htmlData += '</body>';
+        htmlData += '</html>';
+        document.getElementById("status").innerHTML = htmlData;
+    } else {
+        index = 0;
+        responseObj.forEach(function(table) {
+           
+            document.getElementById(table.streamname+":datasize").innerHTML = table.dataTransfered;
+            if(table.status == "running"){
+                document.getElementById(table.streamname+":status").innerHTML = '<div  class="label-status label-status-green">running</div>';
+                document.getElementById(table.streamname+":start").disabled = true;
+                document.getElementById(table.streamname+":edit").disabled = true;
+                document.getElementById(table.streamname+":delete").disabled = true;
+                document.getElementById(table.streamname+":stop").disabled = false;
+              } else {
+                document.getElementById(table.streamname+":status").innerHTML = '<div  class="label-status label-status-red">stopped</div>';
+                document.getElementById(table.streamname+":start").disabled = false;
+                document.getElementById(table.streamname+":edit").disabled = false;
+                document.getElementById(table.streamname+":delete").disabled = false;
+                document.getElementById(table.streamname+":stop").disabled = true;
+              }
+             document.getElementById(table.streamname+":connections").innerHTML = table.connections;
+             //document.getElementById(table.streamname+":logourl").innerHTML = '<img src="'+table.logourl+'">';
+             document.getElementById(table.streamname+":type").innerHTML = getStreamTypeIcon(table.type);
+             document.getElementById(table.streamname+":channelnumber").innerHTML = table.channelnumber;
+             document.getElementById(table.streamname+":streamdescription").innerHTML = table.streamdescription;
+             document.getElementById(table.streamname+":url").innerHTML = table.url;
+             document.getElementById(table.streamname+":streammethod").innerHTML = table.streammethod;
+        });
+    }
+    if(totalstopped == 0){
+        document.getElementById("startAll").disabled = true;
+        } else {
+            document.getElementById("startAll").disabled = false;
+        }
+        if(totalstarted == 0) {
+        document.getElementById("stopAll").disabled = true;
+        } else {
+            document.getElementById("stopAll").disabled = false;
+        }
+}
+
+      function startTimer() {
+        getStatusData();
+        setInterval(getStatusData, 1000);  
+    }
+
+    function formatDataSize(datasize){
+        var catsize = "";
+        if (datasize > 1024) {
+            datasize = datasize / 1024;
+            catsize = 'MB';
+        }
+        if (datasize > 1024) {
+            datasize = datasize / 1024;
+            catsize = 'GB';
+        }
+        datasize = datasize.toFixed(3);
+        return datasize+' '+catsize;
+    } 
+     
+    function teste(){
+        document.getElementById("0:PID").innerHTML = "NULL";
+    }
+      
+    ${commonFrontendFunctionsGet()}   
+
+    </script>   
+    </head>
+    <body onload="startTimer()">
+    <button onclick="startStreamServer('*')"  class="listbutton listbutton-green" id="startAll"><i class="fa fa-play space-right"></i> Start All</button>  
+    <button onclick="stopStreamServer('*')" class="listbutton listbutton-red" id="stopAll"><i class="fa fa-stop space-right"></i> Stop All</button>    
+    <button onclick="addStreamServer()" class="listbutton listbutton-blue" id="addStreamServer"><i class="fa fa-plus"></i> Add Stream Server</button> 
+    <button onclick="downloadPlaylist()" class="listbutton listbutton-blue" id="downloadPlaylist"><i class="fa fa-list"></i> Download Playlist</button>
+    <div id="status"></div>
+    <div id="snackbar">Some text some message..</div>`
+    res.send(data);
+});
 
 app.get('/status/*', (req, res) => {
     var pidtoSee = req.path;
@@ -1975,6 +1951,197 @@ app.get('/about', async function(req, res) {
 });
 
 
+app.get('/styles.css', (req, res) => {
+    var data = "";
+    data = `
+    
+    a {
+        text-decoration: none;
+        color: black;
+    }
+
+    a:hover { 
+        font-weight: 1200;
+        color: blue;
+        
+    }
+    
+    table {
+        border-collapse: collapse;
+        width: 100%;
+        }
+        th, td {
+        padding: 8px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+        }
+        tr:hover {background-color:#f5f5f5;}
+        th {
+             background-color: #ddd;
+           }
+
+           
+       
+           /* kill button */
+           #killbutton {
+            text-decoration: none;
+            border: none;
+            padding: 12px 40px;
+            font-size: 16px;
+            background-color: red;
+            color: #fff;
+            border-radius: 5px;
+            box-shadow: 7px 6px 28px 1px rgba(0, 0, 0, 0.24);
+            cursor: pointer;
+            outline: none;
+            transition: 0.2s all;
+        }
+        /* Adding transformation when the button is active */
+          
+        #killbutton:active {
+            transform: scale(0.98);
+            /* Scaling button to 0.98 to its original size */
+            box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
+            /* Lowering the shadow */
+        }
+        /* kill button end */
+           
+           @-webkit-keyframes fadein {
+             from {bottom: 0; opacity: 0;} 
+             to {bottom: 30px; opacity: 1;}
+           }
+           
+           @keyframes fadein {
+             from {bottom: 0; opacity: 0;}
+             to {bottom: 30px; opacity: 1;}
+           }
+           
+           @-webkit-keyframes fadeout {
+             from {bottom: 30px; opacity: 1;} 
+             to {bottom: 0; opacity: 0;}
+           }
+           
+           @keyframes fadeout {
+             from {bottom: 30px; opacity: 1;}
+             to {bottom: 0; opacity: 0;}
+           }
+           /* end of toast */                  
+           
+           textarea {
+            border: 1px solid #999999;
+            width: 100%;
+            height: 95%;
+            margin: 5px 0;
+            padding: 3px;
+            resize: none;
+          }
+          
+          /* label status */
+          .label-status { 
+            border-radius: .25em; 
+          font-family:Montserrat;
+          font-style:normal;
+          font-weight:400;
+          font-size: 13px!important;
+            color: #fff; 
+            display: inline; 
+            font-size: 75%; 
+            font-weight: 700; 
+            line-height: 1; 
+            padding: .2em .6em .3em; 
+            text-align: center; 
+            vertical-align: baseline; 
+            white-space: nowrap;
+        
+           margin:    0;
+            
+            color:   white; 
+            font-family:   Montserrat;
+            font-size:   14px; 
+            line-height:   1.42857143;
+            
+            height: 100%; 
+            overflow-y: initial; 
+            width: 100%;
+        } 
+        
+        .label-status-green { 
+            background-color: #5cb85c;
+        } 
+        
+        .label-status-red {
+          background-color: #D9534F;
+        }
+        /*end of Label status */
+        
+        /* list buttons */
+           .listbutton {
+            text-decoration: none;
+            border: none;
+            padding: 8px 20px;
+            font-size: 12px;
+            
+            color: #fff;
+            border-radius: 5px;
+            /* box-shadow: 7px 6px 6px 1px rgba(0, 0, 0, 0.24); */
+            cursor: pointer;
+            outline: none;
+            transition: 0.2s all;
+        }
+
+        .listbutton-red {
+            background-color: red;
+        }
+        .listbutton-green {
+            background-color: green;
+        }
+
+        .listbutton-blue {
+            background-color: blue;
+        }
+        /* Adding transformation when the button is active */
+          
+        .listbutton:active {
+            transform: scale(0.98);
+            /* Scaling button to 0.98 to its original size */
+            /* box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24); */
+            /* Lowering the shadow */
+        }
+              .listbutton:disabled {
+                
+                background-color: gray;
+              }
+        /* list button end */`;
+    res.send(data);
+});
+
+app.get('/toast.css', (req, res) => {
+    var data = "";
+    data = `/* Start of toast */  
+    #snackbar {
+      visibility: hidden;
+      min-width: 250px;
+      margin-left: -125px;
+      background-color: #333;
+      color: #fff;
+      text-align: center;
+      border-radius: 2px;
+      padding: 16px;
+      position: fixed;
+      z-index: 1;
+      left: 50%;
+      bottom: 30px;
+      font-size: 17px;
+    }
+    
+    #snackbar.show {
+      visibility: visible;
+      -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+      animation: fadein 0.5s, fadeout 0.5s 2.5s;
+    }`;
+    res.send(data);
+});
+
 
 
 var server = app.listen(config.port);
@@ -2004,7 +2171,7 @@ function loadconfig() {
 
 
 
-        config = { port: 4211, logConsole: true, logWeb: false, showErrorInStream: false, streamlinkpath: "", ffmpegpath: "", ffmpeg: { codec: "mpeg2video", format: "mpegts", serviceprovider: "streamproxy" } };
+        config = { port: 4211, logConsole: true, logWeb: false, showErrorInStream: false, streamlinkpath: "", ffmpegpath: "", ffmpeg: { codec: "mpeg2video", format: "mpegts", serviceprovider: "streamproxy" }, streamserver: { startOnInvoke: false, hideStoppedStreamServerInPlaylist: true } };
 
 
         const fswrite = require("fs");
@@ -2052,6 +2219,22 @@ function loadconfig() {
 
 
 
+    if (config.streamserver == undefined) {
+        config.streamserver = { startOnInvoke: false, hideStoppedStreamServerInPlaylist: true };
+    } else {
+
+        if (config.streamserver.startOnInvoke == undefined) {
+            config.streamserver.startOnInvoke = false;
+        }
+
+
+
+        if (config.streamserver.hideStoppedStreamServerInPlaylist == undefined) {
+            config.streamserver.hideStoppedStreamServerInPlaylist = true;
+        }
+    }
+
+
 
 
 }
@@ -2065,7 +2248,10 @@ function addprocess(req, spawn, user, streamservertype, streamserverArgs) {
     var restream = false;
     var isStreamServer = false;
     var streamserver = streamserverArgs;
+    var streamservername = "";
     var useragent = req.headers["user-agent"];
+    var mystreamserverlist = {};
+    var mystreamserverlistIndex = 0;
 
     switch (streamservertype) {
         case "streamlinkServer":
@@ -2076,6 +2262,10 @@ function addprocess(req, spawn, user, streamservertype, streamserverArgs) {
             break;
         case "streamserver":
             isStreamServer = true;
+            streamservername = streamserverArgs;
+            // start streamserver 
+            mystreamserverlistIndex = arrstreamserverlist.findIndex(val => val.streamname === streamservername);
+            arrstreamserverlist[mystreamserverlistIndex].status = "running";
 
     }
 
@@ -2083,7 +2273,7 @@ function addprocess(req, spawn, user, streamservertype, streamserverArgs) {
     spawncommand = spawncommand.toString();
     spawncommand = spawncommand.replace(/,/g, ' ');
     log("added process " + PID + " to status");
-    processes.push({ url: req.query.url, PID: PID, childprocess: childprocesses, clientIP: req.ip, endpoint: req.path, command: spawncommand, dataSize: 0, user: user, streamlinkserver: streamlinkserver, restream: restream, isStreamServer: isStreamServer, streamArgs: streamserverArgs, client: { ip: req.ip, isMobile: req.useragent.isMobile, isPhone: req.useragent.isPhone, isAndroid: req.useragent.isAndroid, isDesktop: req.useragent.isDesktop, isLinux: req.useragent.isLinux, isWindows: req.useragent.isWindows, isBot: req.useragent.isBot, browser: req.useragent.browser, version: req.useragent.version, os: req.useragent.os, platform: req.useragent.platform, source: req.useragent.source } });
+    processes.push({ url: req.query.url, PID: PID, childprocess: childprocesses, clientIP: req.ip, endpoint: req.path, command: spawncommand, dataSize: 0, user: user, streamlinkserver: streamlinkserver, restream: restream, isStreamServer: isStreamServer, streamArgs: streamserverArgs, spawnArgs: spawn.spawnargs, streamservername: streamservername, client: { ip: req.ip, isMobile: req.useragent.isMobile, isPhone: req.useragent.isPhone, isAndroid: req.useragent.isAndroid, isDesktop: req.useragent.isDesktop, isLinux: req.useragent.isLinux, isWindows: req.useragent.isWindows, isBot: req.useragent.isBot, browser: req.useragent.browser, version: req.useragent.version, os: req.useragent.os, platform: req.useragent.platform, source: req.useragent.source } });
 
 }
 
@@ -2173,7 +2363,7 @@ function getPageTitle(url) {
 }
 
 function appsetheader(res) {
-    //res.set({ 'Server': 'streamproxy' });
+    res.set({ 'Server': 'streamproxy' });
 }
 
 function checkToken(req, res) {
@@ -2208,7 +2398,9 @@ function setDataSize(PID, data) {
 
     if (objIndex > -1) {
 
-        processes[objIndex].dataSize = processes[objIndex].dataSize + data.length / 1024;
+        //processes[objIndex].dataSize = processes[objIndex].dataSize + data.length / 1024;
+        //processes[objIndex].dataSize = data.length / 1024;
+        processes[objIndex].dataSize = data.length / 8;
     }
 }
 
@@ -2299,6 +2491,8 @@ function getChildProcess(PID, globalpids = []) {
 
 function killProcesses(parentPID) {
     var childprocesses = getChildProcess(parentPID);
+
+
 
     removeStreamServer(parentPID);
     if (childprocesses.length > 0) {
@@ -2604,6 +2798,7 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
     var serverdescription = undefined;
     var chnumber = undefined;
     var radio = false;
+
     url = req.query.url;
     url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
 
@@ -2650,19 +2845,19 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
         return false;
     }
 
-
-    if (streamServerExist(streamserver) == true) {
-        res.statusMessage = `the stream server ${streamserver} already exists!`;
-        res.status(500).send(`<h2> the stream server ${streamserver} already exists!</h2>`);
-        return false;
-    }
-
+    /*
+        if (streamServerExist(streamserver) == true) {
+            res.statusMessage = `the stream server ${streamserver} already exists!`;
+            res.status(500).send(`<h2> the stream server ${streamserver} already exists!</h2>`);
+            return false;
+        }
+    */
     if ((config.showErrorInStream == true || req.query.showerrorinstream == 'true') && noDisplayErrorInStream == false && isStreamServer == false) {
         showErrorInStream = true;
         log("Show error in stream is enabled");
     }
 
-    appsetheader(res);
+    //appsetheader(res);
 
     announceStreaming(url);
     debug.remoteIP = req.ip;
@@ -2717,7 +2912,7 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
         debug.exitSignal = signal;
         debug.message = "On close";
         debug.statusExec = "closed";
-        removeStreamServer(stream.pid);
+        removeStreamServer(stream.pid, streamserver);
 
 
     })
@@ -2731,6 +2926,7 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
         if (isStreamServer == true) {
             tunnel.write(data);
         }
+
         setDataSize(stream.pid, data);
         //tunnel.write(data);
         if (isStreamServer == true && streamstart == false) {
@@ -2740,7 +2936,13 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
             <p> ex: ffplay http://${req.hostname}:${getPortCalled(req)}/play/${streamserver}</p>
             <p> you can also download a playlist with all stream serves created from <a href="http://${req.hostname}:${getPortCalled(req)}/streamserver/playlist.m3u">http://${req.hostname}:${getPortCalled(req)}/streamserver/playlist.m3u</a>`
             if (isStreamServer == true) {
-                arrstreamserver.push({ PID: stream.pid, servername: streamserver, serverdescription: decodeURI(serverdescription), chnumber: chnumber, radio: radio, tunnel: tunnel })
+                var arrstreamserverIndex = arrstreamserver.findIndex(value => value.streamname === streamserver);
+                if (arrstreamserverIndex < 0) {
+                    arrstreamserver.push({ streamname: streamserver, tunnel: tunnel })
+                } else {
+                    arrstreamserver[arrstreamserverIndex].tunnel = tunnel;
+                }
+
             }
             res.send(html);
         }
@@ -2757,7 +2959,7 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
 
         log(data.toString());
         var haserror = stderrmsg.indexOf("error");
-        removeStreamServer(stream.pid);
+        removeStreamServer(stream.pid, streamserver);
 
         if (showErrorInStream == true && haserror > -1) {
             if (msgsplit.length > 0) {
@@ -2801,7 +3003,7 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
         debug.exitSignal = signal;
         debug.message = "On exit";
         debug.statusExec = "closed";
-        removeStreamServer(stream.pid);
+        removeStreamServer(stream.pid, streamserver);
 
     })
 
@@ -2859,8 +3061,22 @@ function streamServerExist(streamservername) {
     }
 }
 
-function removeStreamServer(PID) {
-    arrstreamserver = arrstreamserver.filter(val => val.PID !== PID)
+function removeStreamServer(PID, streamname = "") {
+    var streamnametofind = streamname;
+    if (streamname != "" && streamname != undefined) {
+        var processIndex = processes.findIndex(val => val.PID === PID);
+        try {
+            streamnametofind = processes[processIndex].streamservername
+        } catch (e) {
+            streamnametofind = "";
+        }
+
+    }
+    if (streamnametofind != "") {
+        arrstreamserver = arrstreamserver.filter(val => val.streamname !== processes[processIndex].streamservername);
+        streamserverstatus = streamserverstatus.filter(val => val.streamname !== streamnametofind);
+    }
+
 }
 
 function isCallFromBrowser(req) {
@@ -2896,8 +3112,8 @@ function checkstream(url) {
 }
 
 function addStreamServerStatus(req, auth, streamname, UUID) {
-    var theprocess = processes.filter(val => val.isStreamServer == true && val.streamArgs == streamname);
-    streamserverstatus.push({ UUID: UUID, streamname: streamname, pid: theprocess[0].PID, user: auth.user, client: { ip: req.ip, isMobile: req.useragent.isMobile, isPhone: req.useragent.isPhone, isAndroid: req.useragent.isAndroid, isDesktop: req.useragent.isDesktop, isLinux: req.useragent.isLinux, isWindows: req.useragent.isWindows, isBot: req.useragent.isBot, browser: req.useragent.browser, version: req.useragent.version, os: req.useragent.os, platform: req.useragent.platform, source: req.useragent.source } })
+    //var theprocess = processes.filter(val => val.isStreamServer == true && val.streamArgs == streamname);
+    streamserverstatus.push({ UUID: UUID, streamname: streamname, pid: 0, user: auth.user, client: { ip: req.ip, isMobile: req.useragent.isMobile, isPhone: req.useragent.isPhone, isAndroid: req.useragent.isAndroid, isDesktop: req.useragent.isDesktop, isLinux: req.useragent.isLinux, isWindows: req.useragent.isWindows, isBot: req.useragent.isBot, browser: req.useragent.browser, version: req.useragent.version, os: req.useragent.os, platform: req.useragent.platform, source: req.useragent.source } })
 
 }
 
@@ -2938,3 +3154,887 @@ function checkForSpecialCharacter(text) {
     const format = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/;
     return format.test(text);
 }
+
+function commonFrontendFunctionsGet() {
+    var data = "";
+    data = `
+    /* Common functions */
+    function displayToast(color,text) {
+    var x = document.getElementById("snackbar");
+    x.className = "show";
+    x.innerHTML = text;
+    x.style.backgroundColor = color;
+    setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
+  }`;
+    return data;
+}
+
+function startStreamServer(streamname, req) {
+
+
+
+    var mystreamserver = {};
+    var arrstreamserverlistnew = getStreamServersListData();
+    var mystreamserverIndex = arrstreamserverlistnew.findIndex(val => val.streamname === streamname);
+    var response = {};
+    if (mystreamserverIndex < 0) {
+        response.status = 404;
+        response.statusMessage = "streamserver " + streamname + " not found";
+        response.json = { status: "error", message: "streamserver " + streamname + " not found" };
+        log("error on trying to start stream server " + streamname + "streamserver " + streamname + " not found")
+        return response;
+    }
+
+    mystreamserver = arrstreamserverlistnew[mystreamserverIndex]
+
+    if (mystreamserver.status == "running") {
+        response.status = 500;
+        response.statusMessage = "streamserver " + streamname + " already started";
+        response.json = { status: "error", message: "streamserver " + streamname + " already started" };
+        log("error on trying to start stream server " + streamname + "streamserver " + streamname + " already started")
+        return response;
+    }
+
+    if (streamdescription == "") {
+        streamdescription = streamname;
+    }
+
+    var streammethod = mystreamserver.streammethod;
+    var streamdescription = mystreamserver.streamdescription;
+    var url = mystreamserver.url;
+    var service_provider = mystreamserver.service_provider;
+    var videoformat = mystreamserver.videoformat;
+    var videocodec = mystreamserver.videocodec;
+    var audiocodec = mystreamserver.audiocodec;
+    var framesize = mystreamserver.framesize;
+    var framerate = mystreamserver.framerate;
+    var channelnumber = mystreamserver.channelnumber;
+    var title = mystreamserver.title;
+    var hasError = false;
+    var response = { status: 200, json: {} };
+
+
+
+
+    var url = mystreamserver.url;
+    var urltocall = "";
+
+    if (streamname == "" || streamname == undefined) {
+        //alert('fill stream name field');
+
+        hasError = true;
+    } else {
+
+        streamname = "&streamserver=" + streamname
+    }
+
+    if (videoformat == "" || videoformat == undefined) {
+        videoformat = "";
+    } else {
+        videoformat = "&videoformat=" + videoformat;
+    }
+    if (framesize == "" || framesize == undefined) {
+        framesize = "";
+    } else {
+        framesize = "&framesize=" + framesize;
+    }
+
+    if (framerate == "" || framerate == undefined) {
+        framerate = "";
+    } else {
+        framerate = "&framerate=" + framerate;
+    }
+
+    if (streamdescription == "" || streamdescription == undefined) {
+        streamdescription = "";
+    } else {
+        streamdescription = "&streamdescription=" + encodeURI(streamdescription);
+    }
+
+    if (service_provider == "" || service_provider == undefined) {
+        service_provider = "";
+    } else {
+        service_provider = "&serviceprovider=" + service_provider;
+    }
+
+    /*
+    if (channelnumber == "" || channelnumber == undefined) {
+        channelnumber = "";
+
+    } else {
+        channelnumber = "&chnumber=" + channelnumber;
+    }
+*/
+    if (videocodec == "" || videocodec == undefined) {
+        videocodec = "";
+
+    } else {
+        videocodec = "&videocodec=" + videocodec;
+    }
+
+    if (audiocodec == "" || audiocodec == undefined) {
+        audiocodec = "";
+    } else {
+        audiocodec = "&audiocodec=" + audiocodec;
+    }
+
+    if (title == "" || title == undefined) {
+        title = "";
+    } else {
+        title = "&title=" + title;
+    }
+
+    if (url == "" || url == undefined) {
+        //alert('fill stream name field');
+
+        hasError = true;
+    }
+
+    if (hasError == true) {
+        response.status = 500;
+        response.json = { status: "error", message: "server error on start streamserver " + streamname };
+        return response;
+    }
+
+
+    if (streammethod != "/videostream/ffmpeg" && streammethod != "/videostream/play") {
+        videoformat = "";
+        service_provider = "";
+
+        videocodec = "";
+        audiocodec = "";
+    }
+
+    if (streammethod != "/videostream/ffmpeg" && streammethod != "/videostream/play" && streammethod != "/videostream/streamlink") {
+        channelnumber = "";
+    }
+    if (streammethod != "/audiostream/play") {
+        title = "";
+    }
+
+
+
+    urltocall = "http://localhost:" + config.port + streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title;
+
+    const http = require("http");
+    var options = {};
+    if (req.headers.authorization != undefined) {
+        options = {
+            port: config.port,
+            path: streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title,
+            headers: { authorization: req.headers.authorization }
+        }
+    } else {
+        options = {
+            port: config.port,
+            path: streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title
+
+        }
+    }
+    http.get(options, (resp) => {
+        let data = '';
+
+        // A chunk of data has been received.
+        resp.on('data', (chunk) => {
+            data += chunk;
+
+        });
+
+        // The whole response has been received. Print out the result.
+        resp.on('end', () => {
+
+
+
+        });
+
+    }).on("error", (err) => {
+        log("Error on call start streanserver " + streamname + ": " + err.message);
+
+
+    });
+    log("stream server " + streamname + " has started");
+    response.status = 200;
+    response.json = { status: "ok", message: "process executed asynchronous" };
+    return response;
+
+
+}
+
+
+
+function getStreamServersListData() {
+    var arrstreamserverlistnew = [];
+    var processIndex = 0;
+    var processSingle = {};
+    var streamserverSingle = {};
+    var datasize = 0;
+    var catsize = "";
+    arrstreamserverlist.forEach(data => {
+        var streamserverstatusfilter = streamserverstatus.filter(value => value.streamname === data.streamname);
+        streamserverSingle.users = 0
+        processIndex = processes.findIndex(val => val.streamservername === data.streamname);
+        streamserverSingle = data;
+        if (processIndex >= 0) {
+
+            streamserverSingle.status = "running";
+            streamserverSingle.PID = processes[processIndex].PID;
+
+            datasize = processes[processIndex].dataSize;
+            catsize = 'KB';
+            if (datasize > 1024) {
+                datasize = datasize / 1024;
+                catsize = 'MB';
+            }
+            if (datasize > 1024) {
+                datasize = datasize / 1024;
+                catsize = 'GB';
+            }
+            datasize = datasize.toFixed(3);
+            streamserverSingle.dataTransfered = datasize + " " + catsize;
+        } else {
+            streamserverSingle.status = "stopped";
+            streamserverSingle.PID = undefined;
+            streamserverSingle.dataTransfered = "0 bytes"
+        }
+        streamserverSingle.connections = streamserverstatusfilter.length;
+        arrstreamserverlistnew.push(streamserverSingle);
+    })
+    return arrstreamserverlistnew;
+}
+
+function getStreamServerListSingle(streamname) {
+    var arrstreamserverlistnew = getStreamServersListData();
+    var arrstreamserverlistnewIndex = arrstreamserverlistnew.findIndex(val => val.streamname === streamname);
+    if (arrstreamserverlistnewIndex >= 0) {
+        return arrstreamserverlistnew[arrstreamserverlistnewIndex];
+    } else {
+        return {};
+    }
+}
+
+function stopStreamServer(streamservername) {
+    var streamserverlistnew = getStreamServerListSingle(streamservername);
+    var timestamp1 = Date.now();
+    var diff = 0;
+    if (streamserverlistnew.PID != undefined) {
+        try {
+            killProcesses(streamserverlistnew.PID);
+            log("stream server " + streamservername + " stopped");
+
+            return { status: "stopped", message: "process (PID) " + streamserverlistnew.PID + " and your childs has killed" }
+
+        } catch (e) {
+            log(" error on trying to stop stream server " + streamservername + " " + e.message);
+            return { status: "not stopped", message: e.message };
+        }
+
+    } else {
+        log(" error on trying to stop stream server " + streamservername + " stream server not found");
+        return { status: "not stopped", message: "stream server " + streamservername + " not found" };
+    }
+}
+
+function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
+    var html = "";
+
+
+
+    if (actualdata == undefined) {
+        actualdata = { streamname: "", streamdescription: "", streamdescription: "", channelnumber: "", logourl: "", methoddefault: "/videostream/streamlink", streamprovider: "", videoformat: "", videocodec: "", framesize: "", framerate: "", audiocodec: "", title: "", url: "" }
+
+    }
+
+    var pagedata = {
+        methods: [
+            { name: "Videostream (streamlink)", value: "/videostream/streamlink" },
+            { name: "Videostream (ffmpeg)", value: "/videostream/ffmpeg" },
+            { name: "Videostream (streamlink+ffmpeg)", value: "/videostream/play", linuxonly: true },
+            { name: "convert videostream to audiostream", value: "/audiostream/play" }
+        ],
+        mainfields: {
+            streamname: actualdata.streamname,
+            streamdescription: actualdata.streamdescription,
+            channelnumber: actualdata.channelnumber,
+            logourl: actualdata.logourl,
+            url: actualdata.url,
+            methoddefault: actualdata.streammethod
+        },
+        blocks: [{
+                name: "ffmpeg",
+                validfor: ['/videostream/ffmpeg', '/videostream/play'],
+                fields: [
+                    { name: "streamprovider", description: "Provider", required: false, type: "String", default: actualdata.streamprovider },
+                    { name: "videoformat", description: "Video format", required: false, type: "string", default: actualdata.videoformat },
+                    { name: "videocodec", description: "Video codec", required: false, type: "string", default: actualdata.videocodec },
+                    { name: "framesize", description: "Frame size", required: false, type: "choice", default: actualdata.framesize, values: [{ description: "Auto (copy from original video)", value: "" }, { description: "320x240", value: "320x240" }, { description: "480p", value: "720x480" }, { description: "720p", value: "1280x720" }, { description: "1080p", value: "1920x1080" }, { description: "1440p", value: "2560x1440" }, { description: "4K", value: "3840x2160" }, { description: "8K", value: "7680x4320" }, { description: "16K", value: "15360x8640" }] },
+                    { name: "framerate", description: "Frame rate", required: false, type: "choice", default: actualdata.framerate, values: [{ description: "Auto (copy from original video)", value: "" }, { description: "10fps", value: "10" }, { description: "15fps", value: "15" }, { description: "24fps", value: "24" }, { description: "25fps", value: "25" }, { description: "29.97fps", value: "29.97" }, { description: "30fps", value: "30" }, { description: "59.97fps", value: "59.97" }, { description: "60fps", value: "60" }] },
+                    { name: "audiocodec", description: "Audio codec", required: false, type: "string", default: actualdata.audiocodec },
+
+                ]
+            },
+            {
+                name: "Audiostream",
+                validfor: ['/audiostream/play'],
+                fields: [
+                    { name: "title", description: "Title", required: false, type: "string", default: actualdata.title }
+                ]
+            }
+        ]
+    };
+
+
+    // main header
+    html += `<html>
+    <head>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/toast.css">`;
+
+    //styles
+    html += `<style>
+    
+    
+    
+    .label {
+      position: absolute;
+        /*left: 42%; */
+       
+    }
+    
+    .secondaryinput {
+      position: absolute;
+      /*  left: 42%; */
+       width: 800px;
+       height: 30px;
+       border-radius: 5px;
+       
+       
+    }
+    
+    
+    #main {
+      width: 100%;
+    }
+    
+    #forms {
+      position: relative;
+      top: 30px;
+      width:800px;
+      margin: auto;
+      
+    }
+    
+    
+    `
+    pagedata.blocks.forEach(data => {
+        html += `#for_${data.name}{
+            display: none;
+        }
+
+    `
+    });
+    html += `
+    #logdiv {
+        position: relative;
+        border:  1px solid black;
+        width: 1300px;
+        height: 500px;
+        margin: auto;
+        top: 200px;
+      }
+
+    #maintainserverbutton {
+                   /* transform: translatex(1180px) translatey(352px);*/
+                   /* min-height: 35px; */
+                     position: relative;
+                     width: 186px;
+                     
+                     
+                                 text-decoration: none;
+                                 border: none;
+                                 padding: 12px 40px;
+                                 font-size: 16px;
+                                 background-color: blue;
+                                 color: #fff;
+                                 border-radius: 5px;
+                                 box-shadow: 7px 6px 28px 1px rgba(0, 0, 0, 0.24);
+                                 cursor: pointer;
+                                 outline: none;
+                                 transition: 0.2s all;
+                             }
+                 
+                             #maintainserverbutton:active {
+                                 transform: scale(0.98);
+                                 
+                                 box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
+                                 
+                             } 
+                             #maintainserverbutton:disabled {
+                                background-color: gray;
+                             }  
+
+
+    #resetbutton {
+                    /* transform: translatex(1180px) translatey(352px);*/
+                    /* min-height: 35px; */
+                        position: relative;
+                        width: 186px;
+                                  
+                                  
+                        text-decoration: none;
+                        border: none;
+                        padding: 12px 40px;
+                        font-size: 16px;
+                        background-color: red;
+                        color: #fff;
+                        border-radius: 5px;
+                        box-shadow: 7px 6px 28px 1px rgba(0, 0, 0, 0.24);
+                        cursor: pointer;
+                        outline: none;
+                        transition: 0.2s all;
+                        }
+                              
+                        #resetbutton:active {
+                            transform: scale(0.98);
+                                              
+                            box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
+                                              
+                            } 
+                        #resetbutton:disabled {
+                            background-color: gray;
+                            }  
+                             
+    </style>`
+        /* Scripts */
+    html += `<script>
+    function start(){
+        document.getElementById("streammethod").value = "${pagedata.mainfields.methoddefault}";
+        `
+    pagedata.blocks.forEach(block => {
+        block.fields.filter(fieldfilter => fieldfilter.type === "choice").forEach(field => {
+            html += `document.getElementById("${block.name}_${field.name}").value = "${field.default}";
+        `
+        });
+    });
+    html += `    enabledisablefields();
+    }
+    function maintainserver(){
+       
+        var streamname = document.getElementById("streamname").value;
+        var streammethod = document.getElementById("streammethod").value;
+        var streamdescription = document.getElementById("streamdescription").value;
+        var channelnumber = document.getElementById("channelnumber").value;
+        var logourl = document.getElementById("logourl").value;
+        var url = document.getElementById("url").value;
+        `
+    pagedata.blocks.forEach(block => {
+        block.fields.forEach(field => {
+            html += `var ${field.name} = document.getElementById("${block.name}_${field.name}").value;
+                `
+        })
+    })
+    html += `
+        var hasError = false;
+        var streamserverdata = {"streamname": "", "streammethod": "", "streamdescription": "", "channelnumber":"","url": ""`
+    pagedata.blocks.forEach(block => {
+        block.fields.forEach(field => {
+            html += `,"${field.name}": ""`
+        })
+    })
+    html += `};
+        
+    
+        document.getElementById("streamname").style.borderColor = "black";
+          document.getElementById("streamdescription").style.borderColor = "black";
+          document.getElementById("url").style.borderColor = "black";
+          document.getElementById("channelnumber").style.borderColor = "black";
+    
+        if(streamdescription == ""){
+          streamdescription = streamname;
+        }
+    
+        if(checkForSpecialCharacter(streamdescription) == true){
+          alert("don't use special character in service description");
+          document.getElementById("streamdescription").style.borderColor = "red"
+          return false;
+        }
+    
+        if(checkForSpecialCharacter(streamname) == true){
+          alert("don't use special character in service name");
+          document.getElementById("streamname").style.borderColor = "red"
+          return false;
+        }
+    
+        if(onlyNumbers(channelnumber) == false && channelnumber != ""){
+          alert('in channel number field, use only numbers');
+          document.getElementById("channelnumber").style.borderColor = "red";
+          return false;
+        }
+    
+        var url = document.getElementById("url").value;
+        var urltocall = "";
+        
+        if(streamname == "" || streamname == undefined){
+          //alert('fill stream name field');
+          document.getElementById("streamname").style.borderColor = "red"
+          hasError = true;
+        } else {
+        
+          //streamname = "&streamserver="+streamname
+          streamserverdata.streamname = streamname;
+        }
+
+        if(streamdescription == "" || streamdescription == undefined){
+            streamserverdata.streamdescription = "" ;
+        } else {
+            streamserverdata.streamdescription = streamdescription ;
+        }
+
+        if(logourl == "" || logourl == undefined){
+            streamserverdata.logourl = "" ;
+        } else {
+            streamserverdata.logourl = logourl;
+        }
+
+        if(channelnumber == "" || channelnumber == undefined){
+            streamserverdata.channelnumber = "" ;
+          
+        } else {
+            streamserverdata.channelnumber = channelnumber ;
+        }
+
+        if(url == "" || url == undefined){
+            //alert('fill stream name field');
+            document.getElementById("url").style.borderColor = "red"
+            hasError = true;
+          }
+      
+          if(hasError == true){
+            alert('fill all required fields in red');
+            return false;
+          } 
+    `
+    pagedata.blocks.forEach(block => {
+        block.fields.forEach(field => {
+            if (field.required == false) {
+                html += `streamserverdata.${field.name} = ${field.name};
+                `
+            } else {
+                html += `if(${field.name} == "" || ${field.name} == undefined){
+                    
+                    document.getElementById("${field.name}").style.borderColor = "red"
+                    hasError = true;
+                  } else {
+                  
+                    
+                    streamserverdata.${field.name} = ${field.name};
+                  }`
+            }
+
+        })
+    })
+
+    pagedata.blocks.forEach(block => {
+        var ifargs = "";
+
+        block.validfor.forEach(validfor => {
+            ifargs += `&& streammethod != "${validfor}" `
+        })
+        ifargs = ifargs.substring(3);
+        html += `if(${ifargs}){
+            `
+        block.fields.forEach(field => {
+            html += `${field.name} = "";
+            `
+        })
+        html += `}
+        `
+    })
+
+
+    html += `
+    streamserverdata.streamdescription = streamdescription;
+    streamserverdata.url = url;
+    streamserverdata.streammethod = streammethod;
+    urltocall = streammethod + "?url=" + url + streamname +  streamdescription + channelnumber `
+    pagedata.blocks.forEach(block => {
+        block.fields.forEach(field => {
+            html += `+ ${field.name}`
+        })
+    })
+    html += `;
+    
+
+
+    //alert("teste")
+    //window.location.href = urltocall;
+    document.getElementById("logdiv").innerHTML = "processing....";
+    document.getElementById("maintainserverbutton").disabled = true;
+
+    fetch("/api/streamserver", {
+        method: "${method}",
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': '${req.headers.authorization}'
+        },
+        body: JSON.stringify(streamserverdata)
+    }).then(
+        response => {
+
+            if (response.status == 200) {
+
+            }
+            return response.text();
+        }).then(
+        data => {
+            var response = JSON.parse(data);
+            document.getElementById("maintainserverbutton").disabled = false;
+            `
+
+    if (method == "POST") {
+        html += `if (response.streamadded == true) {
+                document.getElementById("logdiv").innerHTML = "<h2>stream server has added in list<h2>";
+                `
+    } else {
+        html += `if (response.streamchanged == true) {
+                document.getElementById("logdiv").innerHTML = "<h2>stream server has change<h2>";
+                `
+    }
+    html += `
+                //alert("stream server has added in list");
+                resetData();
+     
+                enabledisablefields()
+                `
+
+    if (req.headers.referer != undefined) {
+        if (req.headers.referer.indexOf('/streamserver/list') > -1) {
+            html += `window.location.assign("${req.headers.referer}");
+        `;
+        }
+    }
+    html += `
+                
+           
+            } else {
+                document.getElementById("logdiv").innerHTML = "<h2>Error on execute: " + response.message + "<h2>";
+
+            }
+        });`
+        //location.replace(urltocall)
+    html += `
+}
+`
+
+    html += `
+    function enabledisablefields() {
+        var streammethod = document.getElementById("streammethod").value;
+`
+    pagedata.blocks.forEach(block => {
+        var ifargs = "";
+        block.validfor.forEach(validfor => {
+            ifargs += `|| streammethod == "${validfor}" `
+        })
+        ifargs = ifargs.substring(3);
+        html += `if(${ifargs}){
+        document.getElementById("for_${block.name}").style.display = 'block';
+    } else {
+        document.getElementById("for_${block.name}").style.display = 'none';
+    }
+    `
+
+    })
+
+
+    html += `
+    }
+
+    function checkForSpecialCharacter(text) {
+        //  const format = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/; // removed because javascript error
+        // return format.test(text);
+        //return false;
+    }
+
+    function onlyNumbers(str) {
+        return /^[0-9]+$/.test(str);
+    }
+
+    function resetData(){
+        document.getElementById("streamname").value = "${pagedata.mainfields.streamname}";
+        document.getElementById("streamdescription").value = "${pagedata.mainfields.streamdescription}";
+        document.getElementById("url").value = "${pagedata.mainfields.url}";
+        document.getElementById("streammethod").value = "${pagedata.methods[0].value}";
+        document.getElementById("channelnumber").value = "${pagedata.mainfields.channelnumber}";
+        `
+    pagedata.blocks.forEach(block => {
+        block.fields.forEach(field => {
+            html += `document.getElementById("${block.name}_${field.name}").value = "${field.default}";
+        `
+        })
+    })
+
+    html += `}
+    </script>
+    </head>
+    <body onload="start()">
+      <div id="main">`
+    if (method == "POST") {
+        html += `
+        <center><h1>Create a Stream server</h1></center>
+        <h2><center>use this page to create a streamserver and serve it to multiple users (only one thread per stream server is created)<center></h2>`
+    } else if (method == "PUT") {
+        html += `
+        <center><h1>Edit stream Server ${actualdata.streamname}</h1></center>
+        <h2><center><center></h2>`
+    }
+
+
+    html += `
+      <div id="forms">
+      <!-- streamname -->
+            <div id="streamnamediv" > 
+          <label  for="streamname" class="label" id="teste">Streaming Name:</label><br>
+          `
+    if (method == "POST") {
+        html += `<input id="streamname" name="streamname" class="secondaryinput" size="50" value=""/><br /><br /><br /> 
+           `
+    } else if (method == "PUT") {
+        html += `<input id="streamname" name="streamname" class="secondaryinput" size="50" value="${pagedata.mainfields.streamname}" disabled = "true"/><br /><br /><br /> 
+            `
+    }
+    html += `
+        </div>
+      <!-- stream description-->
+          <div id="streamdescriptiondiv" >
+             <label class="label">Stream Description (optional):</label> <br>
+          <input id="streamdescription" name="streamdescription" class="secondaryinput" size="50" value="${pagedata.mainfields.streamdescription}"/><br /><br /><br />
+        </div>
+        
+                   
+                     <!-- stream methods -->
+                     <div id="streammethoddiv" >
+                     <label  class="label">Streaming Method:</label> <br>
+                     <select id="streammethod" name="streammethod" class="secondaryinput" onchange = "enabledisablefields()" value="${pagedata.mainfields.methoddefault}">`;
+    pagedata.methods.forEach(data => {
+        if (data.linuxonly != true || os.platform == "linux") {
+            html += `<option value="${data.value}">${data.name}</option>\n`;
+        }
+    })
+
+    html += `</select><br /><br />   <br>
+                </div>`
+
+    pagedata.blocks.forEach(block => {
+        html += `<!-- Block ${block.name} -->
+        `;
+        html += `<div id="for_${block.name}">
+        `
+        block.fields.forEach(field => {
+            var labeldescription = "";
+            labeldescription += `${field.description}`;
+            if (field.required == false) {
+                labeldescription += `(optional)`;
+            }
+            labeldescription += `:`;
+            html += `<!-- ${block.name}:${field.description} -->
+          <div id="${block.name}_${field.name}div">
+          <label class="label">${labeldescription}</label><br>
+          `;
+            if (field.type != "choice") {
+                html += `<input id="${block.name}_${field.name}" name="${block.name}_${field.name}" class="secondaryinput" size="50" value="${field.default}"/><br /><br /><br />
+                `
+            } else {
+                html += `<select id="${block.name}_${field.name}" name="${block.name}_${field.name}" class="secondaryinput" value="${field.default}">
+            `
+                field.values.forEach(value => {
+                    html += `<option value="${value.value}">${value.description}</option>
+             `
+                });
+                html += `</select><br /><br />   <br>
+                `;
+            }
+            html += `</div>
+            
+            `;
+        });
+        html += `</div>
+        
+        `;
+
+    })
+    html += `
+    <div id="channelnumberdiv">
+    <label class="label">Channel Number (optional):</label> <br>
+ <input id="channelnumber" name="channelnumber" class="secondaryinput" size="50" value="${pagedata.mainfields.channelnumber}"/><br /><br /><br />
+ <label class="label">LogoUrl (optional):</label> <br>
+ <input id="logourl" name="logourl" class="secondaryinput" size="50" value="${pagedata.mainfields.logourl}"/><br /><br /><br />
+</div>
+
+    <!-- url --> 
+    <div id="urldiv"> 
+      <label  class="label">Url:</label><br>
+     <input id="url" name="url" size="50" id="urllabel" placeholder="URL to stream" class="secondaryinput" value="${pagedata.mainfields.url}"/><br /><br><br />
+     <center>
+     <button onclick="maintainserver()" id="maintainserverbutton" >Save</button>
+     <button onclick="resetData()" id="resetbutton" >Reset</button>
+     </center>
+   </div>
+   </div>
+   <div id="logdiv">
+   
+     </div>
+     </div>  `
+    html += `               
+                         </body>
+                         </html>`;
+
+    res.send(html);
+}
+
+function startAllStreamServers(req) {
+    var arrstreamserverlistnew = getStreamServersListData();
+    var arrstreamserverlistnewFilter = arrstreamserverlistnew.filter(val => val.status != "running");
+    arrstreamserverlistnewFilter.forEach(val => {
+        startStreamServer(val.streamname, req);
+    })
+}
+
+function stopAllStreamServers() {
+    var arrstreamserverlistnew = getStreamServersListData();
+    var arrstreamserverlistnewFilter = arrstreamserverlistnew.filter(val => val.status != "stopped");
+    arrstreamserverlistnewFilter.forEach(val => {
+        stopStreamServer(val.streamname);
+    })
+}
+
+function loadStreamServers() {
+
+    try {
+        const fs = require("fs");
+        const jsonString = fs.readFileSync("./streamproxy.streamservers.json");
+        arrstreamserverlist = JSON.parse(jsonString);
+        //startAllStreamServers();
+    } catch (err) {
+
+
+        saveStreamServers();
+
+
+    }
+}
+
+function saveStreamServers() {
+    const fswrite = require("fs");
+    try {
+        var arrstreamserverliststr = JSON.stringify(arrstreamserverlist);
+
+        fswrite.writeFileSync("./streamproxy.streamservers.json", arrstreamserverliststr);
+    } catch (err) {
+
+    }
+}
+
+
+
+
+/* end of program */
