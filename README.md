@@ -77,6 +77,9 @@
 <li>Ex: http://localhost:3000/videostream/info?url=https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8<br />convert the TV RED BULL to a streaming radio station. NOTE: In windows platforms is only possible to convert videostrem to audiostream from ffmpeg (streamlink is not possible)</li>
 </ul>
 </li>
+</ul>
+<p>&nbsp;</p>
+<ul>
 <li>http://&lt;serverip&gt;:&lt;port&gt;/videostream/play?url=&lt;livestreamurl&gt;
 <ul>
 <li>Convert a streamlink's stream to MPEG-2 TS</li>
@@ -96,12 +99,26 @@
 <li><strong>Note: due to compatibility issues, this endpoint cannot run if the server is installed on windows</strong></li>
 </ul>
 </li>
+</ul>
+<p>&nbsp;</p>
+<ul>
 <li>http://&lt;serverip&gt;:&lt;port&gt;/streamserver/create
 <ul>
 <li>streamserver is a livestream server that allows with just one thread created and using the same streamproxy port you can provide the livestream to several clients, just access http://&lt;serverip&gt;:&lt;port&gt;/play/&lt;servername&gt;, where &lt; servername&gt; is the server name given at creation time. To close this server session, just kill the corresponding process in the status page (/status).&nbsp;<strong>Now compatible with streamlink, ffmpeg and convert videostream to audiolivestream</strong></li>
-<li><strong>Persistence will be added in a future release</strong></li>
+<li><strong>use the url http://&lt;serverip&gt;:&lt;port&gt;/streamserver/list instead of this one, because there you will have the option to create a new streamserver. Direct access to http://&lt;serverip&gt;:&lt;port&gt;/streamserver/create and http://&lt;serverip&gt;:&lt;port&gt;/streamserver/edit will be removed in a future release </strong></li>
 </ul>
 </li>
+</ul>
+<p>&nbsp;</p>
+<ul>
+<li>http://&lt;serverip&gt;:&lt;port&gt;/streamserver/list
+<ul>
+<li>manage your streamservers created. in this url you can see the list of created streamservers, stop, start, edit, delete and create new</li>
+</ul>
+</li>
+</ul>
+<p>&nbsp;</p>
+<ul>
 <li>http://&lt;serverip&gt;:&lt;port&gt;/streamserver/playlist.m3u
 <ul>
 <li>Download all streamservers mounted in m3u playlist format</li>
@@ -126,24 +143,7 @@
 </ul>
 </li>
 </ul>
-<p>&nbsp;</p>
 <ul>
-<li>http://&lt;serverip&gt;:&lt;port&gt;/api/checkstream?url=&lt;livestreamurl&gt;
-<ul>
-<li>checks if a stream is online or offline, the output will be in json format</li>
-<li>Ex: http://localhost:3000/videostream/info?url=https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8<br />returns if the Redbull TV stream is online</li>
-</ul>
-</li>
-</ul>
-<p>&nbsp;</p>
-<ul>
-<li>http://&lt;serverip&gt;:&lt;port&gt;/api/streaminfo?url=&lt;livestreamurl&gt;
-<ul>
-<li>Retrieve livestream information through ffprobe, output will be in json format</li>
-<li>Ex: http://localhost:3000/videostream/info?url=https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8<br />Displays information about the Redbull TV livestream</li>
-</ul>
-<p>&nbsp;</p>
-</li>
 <li>http://&lt;serverip&gt;:&lt;port&gt;/status
 <ul>
 <li>see status of opened process</li>
@@ -170,6 +170,8 @@
 </ul>
 </li>
 </ul>
+<p>&nbsp;</p>
+<p>to see the list of APIs available in streamproxy, consider checking our wiki at: <a href="to%20see the list of APIs available in streamproxy, consider checking our wiki at: https://github.com/asabino2/streamproxy/wiki/API's-of-StreamProxy">https://github.com/asabino2/streamproxy/wiki/API's-of-StreamProxy</a></p>
 <hr />
 <h3>streamproxy.config.json</h3>
 <p>you can modify some parameters of the program, changing the config.json file located in the same folder as the executable</p>
@@ -182,7 +184,7 @@
    "codec": "mpeg2video",
    "format": "mpegts",
    "serviceprovider": "streamproxy"
- }, "token": "yourtoken", (optional)
+ }, <span style="text-decoration: line-through;">"token": "yourtoken", (optional)<br /></span>"streamserver": { <br />  "startOnInvoke": false,<br />  "hideStoppedStreamServerInPlaylist": true<br />}
  "basicAuthentication": { "active": true, "users": [{ "username": "teste", "password": "teste2" }] } (optional, if exist, server will be require login in all endpoints)
 
  
@@ -196,13 +198,15 @@
 <li>codec: the video codec of transcoded ffmpeg's stream</li>
 <li>format: the video container of transcoded ffmpeg's stream</li>
 <li>serviceprovider: the service provider of transcoded ffmpeg's stream</li>
-<li>token: protect your server to be acessed from a unauthorized user, if token tag is present in config file, you must to use token query parameter to access api, videostream and audiostream endpoints
+<li><span style="text-decoration: line-through;">token: protect your server to be acessed from a unauthorized user, if token tag is present in config file, you must to use token query parameter to access api, videostream and audiostream endpoints&nbsp;</span> (no more avaiable, use Basic Authentication instead)
 <ul>
-<li>Ex: if token tag is present in config file with value "testetoken", to play skynews youtube channel you need to call url like this: http://localhost:3000//videostream/streamlink?url=https://www.youtube.com/c/SkyNews/live&amp;token=testetoken, otherwise will fail with 401 unauthorized error</li>
+<li><span style="text-decoration: line-through;">Ex: if token tag is present in config file with value "testetoken", to play skynews youtube channel you need to call url like this: http://localhost:3000//videostream/streamlink?url=https://www.youtube.com/c/SkyNews/live&amp;token=testetoken, otherwise will fail with 401 unauthorized error</span></li>
 </ul>
 </li>
-<li>Now you can choose the endpoints that will be restricted if the token tag exists in the configuration file and is different from the one sent in the url token parameter, just fill the restrictedEndpoints tag with the endpoints you want to restrict (this tag is an array)</li>
-<li>Now, in addition to using token, you can create logins to allow access to all endpoints. The server will use Basic Authentication, so to use the videostream url in your IPTV app you should use: http://&lt;username&gt;:&lt;password&gt;@&lt;IP&gt;:&lt;port&gt;/videostream/streamlink?url=&lt;url address from the live stream &gt;<br />The token is now obsolete and may be retired from future versions</li>
+<li><span style="text-decoration: line-through;">Now you can choose the endpoints that will be restricted if the token tag exists in the configuration file and is different from the one sent in the url token parameter, just fill the restrictedEndpoints tag with the endpoints you want to restrict (this tag is an array)</span></li>
+<li>startOnInvoke: if seted to true, if a streamserver is stopped, will be started when called, if false, will raise a HTTP 500 error</li>
+<li>hideStoppedStreamServerInPlaylist: if seted to true, will hide the stopped streamservers in /streamserver/playlist.m3u, else will be show in playlist all the streamservers created, even the stoppeds</li>
+<li>Now, <span style="text-decoration: line-through;">in addition to using token</span>, you can create logins to allow access to all endpoints. The server will use Basic Authentication, so to use the videostream url in your IPTV app you should use: http://&lt;username&gt;:&lt;password&gt;@&lt;IP&gt;:&lt;port&gt;/videostream/streamlink?url=&lt;url address from the live stream &gt;<br />The token is now obsolete and may be retired from future versions</li>
 </ul>
 <hr />
 <p>there are a docker version of streamproxy at <a href="https://hub.docker.com/repository/docker/asabino2/streamproxy">https://hub.docker.com/repository/docker/asabino2/streamproxy</a></p>
