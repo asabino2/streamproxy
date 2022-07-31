@@ -65,10 +65,10 @@ var pjson = require('../package.json');
 
 // Title screen
 console.log("\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2557   \u2588\u2588\u2588\u2557    \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2557  \u2588\u2588\u2557\u2588\u2588\u2557   \u2588\u2588\u2557\r\n\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u2550\u2588\u2588\u2554\u2550\u2550\u255D\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2551    \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557\u255A\u2588\u2588\u2557\u2588\u2588\u2554\u255D\u255A\u2588\u2588\u2557 \u2588\u2588\u2554\u255D\r\n\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557   \u2588\u2588\u2551   \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2554\u2588\u2588\u2588\u2588\u2554\u2588\u2588\u2551    \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2551   \u2588\u2588\u2551 \u255A\u2588\u2588\u2588\u2554\u255D  \u255A\u2588\u2588\u2588\u2588\u2554\u255D \r\n\u255A\u2550\u2550\u2550\u2550\u2588\u2588\u2551   \u2588\u2588\u2551   \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u255D  \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2551\u255A\u2588\u2588\u2554\u255D\u2588\u2588\u2551    \u2588\u2588\u2554\u2550\u2550\u2550\u255D \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551   \u2588\u2588\u2551 \u2588\u2588\u2554\u2588\u2588\u2557   \u255A\u2588\u2588\u2554\u255D  \r\n\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551   \u2588\u2588\u2551   \u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2551 \u255A\u2550\u255D \u2588\u2588\u2551    \u2588\u2588\u2551     \u2588\u2588\u2551  \u2588\u2588\u2551\u255A\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2554\u255D \u2588\u2588\u2557   \u2588\u2588\u2551   \r\n\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D   \u255A\u2550\u255D   \u255A\u2550\u255D  \u255A\u2550\u255D\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u255D  \u255A\u2550\u255D\u255A\u2550\u255D     \u255A\u2550\u255D    \u255A\u2550\u255D     \u255A\u2550\u255D  \u255A\u2550\u255D \u255A\u2550\u2550\u2550\u2550\u2550\u255D \u255A\u2550\u255D  \u255A\u2550\u255D   \u255A\u2550\u255D   ");
-console.log("                                         A Proxy for the livestreams                   ")
-console.log(`                                             version ${pjson.version}                  `)
-console.log("                              Developed by Alexander Sabino (asabino2.github.io)       ")
-console.log("                                           Rio de Janeiro - Brazil                     ")
+console.log("                                       A Proxy for the livestreams                   ")
+console.log(`                                          version ${pjson.version}                   `)
+console.log("                          Developed by Alexander Sabino (https://github.com/asabino2/)       ")
+console.log("                                      Rio de Janeiro - Brazil                     ")
 
 
 
@@ -587,10 +587,11 @@ app.get('/videostream/restream', (req, res) => {
     if (format == undefined) {
         format = "flv";
     }
+    /*
     if (checkToken(req, res) == false) {
         return false;
     };
-
+*/
     var auth = basicAuth(req, res);
     if (auth.authenticated == false) {
         return false;
@@ -839,10 +840,11 @@ app.get('/api/streamserver', (req, res) => {
 
 // Get streaminfo: http://<ip>:<port>?url=<url>
 app.get('/api/streaminfo', (req, res) => {
+    /*
     if (checkToken(req, res) == false) {
         return false;
     };
-
+*/
     var auth = basicAuth(req, res);
     if (auth.authenticated == false) {
         return false;
@@ -1037,10 +1039,11 @@ app.post('/api/streamserver/stop', (req, res) => {
 
 // Check stream: http://<ip>:<port>?url=<url>
 app.get('/api/checkstream', (req, res) => {
+    /*
     if (checkToken(req, res) == false) {
         return false;
     };
-
+*/
     var auth = basicAuth(req, res);
     if (auth.authenticated == false) {
         return false;
@@ -2803,11 +2806,11 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
     url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
 
 
-
-    if (checkToken(req, res) == false) {
-        return false;
-    };
-
+    /*
+        if (checkToken(req, res) == false) {
+            return false;
+        };
+    */
 
 
 
