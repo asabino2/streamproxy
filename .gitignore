@@ -3,6 +3,7 @@
 /bin/
 /resources/
 /docker/
-./streamproxy.config.json
+./streamproxy.*
 compile*.bat
-/streamproxy.config.json
+/streamproxy.*
+

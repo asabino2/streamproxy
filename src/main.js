@@ -3443,7 +3443,7 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
 
 
     if (actualdata == undefined) {
-        actualdata = { streamname: "", streamdescription: "", streamdescription: "", channelnumber: "", logourl: "", methoddefault: "/videostream/streamlink", streamprovider: "", videoformat: "", videocodec: "", framesize: "", framerate: "", audiocodec: "", title: "", url: "" }
+        actualdata = { streamname: "", streamdescription: "", streamdescription: "", channelnumber: "", logourl: "", streammethod: "/videostream/streamlink", streamprovider: "", videoformat: "", videocodec: "", framesize: "", framerate: "", audiocodec: "", title: "", url: "" }
 
     }
 
