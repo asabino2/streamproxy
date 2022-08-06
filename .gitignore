@@ -5,5 +5,7 @@
 /docker/
 ./streamproxy.*
 compile*.bat
+compile*.sh
 /streamproxy.*
-
+/apidoc.yaml
+/apidocs_fromgithub.md

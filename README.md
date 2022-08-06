@@ -144,7 +144,23 @@
 </li>
 </ul>
 <ul>
-<li>http://&lt;serverip&gt;:&lt;port&gt;/status
+<li>http://&lt;serverip&gt;:&lt;port&gt;/user/list
+<ul>
+<li>User list and management (create, edit and delete)</li>
+</ul>
+</li>
+<li>http://&lt;serverip&gt;:&lt;port&gt;/user/create
+<ul>
+<li>Create a new user</li>
+</ul>
+</li>
+<li>http://&lt;serverip&gt;:&lt;port&gt;/changepassword
+<ul>
+<li>Change your own password</li>
+<li><strong>OBS: For now, is only possible to change your own password, if you forgot your password and want to recorver and change, go to users file (see above in this document), remove your user and assign the role administrator to anonymous user, go to user manager page (/user/list) again and recreate your user.</strong></li>
+</ul>
+</li>
+<li>&nbsp;http://&lt;serverip&gt;:&lt;port&gt;/status
 <ul>
 <li>see status of opened process</li>
 </ul>
@@ -171,7 +187,8 @@
 </li>
 </ul>
 <p>&nbsp;</p>
-<p>to see the list of APIs available in streamproxy, consider checking our wiki at: <a href="to%20see the list of APIs available in streamproxy, consider checking our wiki at: https://github.com/asabino2/streamproxy/wiki/API's-of-StreamProxy">https://github.com/asabino2/streamproxy/wiki/API's-of-StreamProxy</a></p>
+<p>to see the list of APIs available in streamproxy check the url: http://&lt;serverip&gt;:&lt;port&gt;/docs/api</p>
+<p>or in address: <a href="https://asabino.stoplight.io/docs/streamproxy/34dd32710e316-streamproxy">https://asabino.stoplight.io/docs/streamproxy/34dd32710e316-streamproxy</a></p>
 <hr />
 <h3>streamproxy.config.json</h3>
 <p>you can modify some parameters of the program, changing the config.json file located in the same folder as the executable</p>
@@ -208,6 +225,144 @@
 <li>hideStoppedStreamServerInPlaylist: if seted to true, will hide the stopped streamservers in /streamserver/playlist.m3u, else will be show in playlist all the streamservers created, even the stoppeds</li>
 <li>Now, <span style="text-decoration: line-through;">in addition to using token</span>, you can create logins to allow access to all endpoints. The server will use Basic Authentication, so to use the videostream url in your IPTV app you should use: http://&lt;username&gt;:&lt;password&gt;@&lt;IP&gt;:&lt;port&gt;/videostream/streamlink?url=&lt;url address from the live stream &gt;<br />The token is now obsolete and may be retired from future versions</li>
 </ul>
+<p>&nbsp;</p>
+<hr />
+<h3>streamproxy.authroles.json</h3>
+<p>Authorizations roles file, you can modify or create new authorization roles changing this file</p>
+<p>&nbsp;</p>
+<pre>[
+    {
+      "name": "basic",
+      "description": "Basic Authorization",
+      "authorizations": [
+        {
+          "endpoint": "/",
+          "methods": [
+            "GET"
+          ]
+        },
+        {
+          "endpoint": "/about",
+          "methods": [
+            "GET"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "basicWatchers",
+      "description": "Basic Watches",
+      "authorizations": [
+        {
+          "endpoint": "/videostream/*",
+          "methods": [
+            "GET"
+          ]
+        },
+        {
+          "endpoint": "/audiostream/play",
+          "methods": [
+            "GET"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "streamserverWatchersbasic",
+      "description": "Stream Server Watchers Basic (without playlist Download)",
+      "authorizations": [
+        {
+          "endpoint": "/play/*",
+          "methods": [
+            "GET"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "playlistdownloader",
+      "description": "Playlist Downloader",
+      "authorizations": [
+        {
+          "endpoint": "/streamserver/playlist.m3u",
+          "methods": [
+            "GET"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "streamserverWatchersfull",
+      "description": "Stream Server Watchers Full (with playlist Download)",
+      "authorizations": [
+        {
+          "endpoint": "/play/*",
+          "methods": [
+            "GET"
+          ]
+        },
+        {
+          "endpoint": "/streamserver/playlist.m3u",
+          "methods": [
+            "GET"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "administrator",
+      "description": "Administrator",
+      "authorizations": [
+        {
+          "endpoint": "*",
+          "methods": [
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE",
+            "PATCH"
+          ]
+        }
+      ]
+    }
+  ]
+</pre>
+<ul>
+<li>name: name of authorization role</li>
+<li>description: Description of authorization role</li>
+<li>authorizations: endpoints and methods authorizeds for this role (wildcard is allowed)</li>
+</ul>
+<p>&nbsp;</p>
+<hr />
+<h3>streamproxy.users.json</h3>
+<p>File to store all users created in streamproxy. When not exists will be created with 2 users: anonymous, with only basic role and no password, and admin (with password admin) with administrator role</p>
+<p>&nbsp;</p>
+<pre>[
+   {
+      "username":"anonymous",
+      "password":"",
+      "fullname":"Anonymous",
+      "authorizations":{
+         "basic":true,
+         "basicWatchers":true,
+         "streamserverWatchersbasic":false,
+         "playlistdownloader":false,
+         "streamserverWatchersfull":false,
+         "administrator":false
+      }
+   },
+   {
+      "username":"admin",
+      "password":"d033e22ae348aeb5660fc2140aec35850c4da997",
+      "fullname":"Administrator",
+      "authorizations":{
+         "administrator":true
+      }
+   }
+]
+</pre>
+<p><strong>prefer to use the user manager (/user/list) instead of directly editing this file</strong></p>
+<p><strong>if you enabled basic authetication in config file then all users created there will be automatically migrated to streamproxy.users.json file</strong></p>
 <hr />
 <p>there are a docker version of streamproxy at <a href="https://hub.docker.com/repository/docker/asabino2/streamproxy">https://hub.docker.com/repository/docker/asabino2/streamproxy</a></p>
 <hr />

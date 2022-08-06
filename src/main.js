@@ -16,6 +16,54 @@ var mydatabuf = undefined;
 var streamserverstatus = [];
 var arrstreamserverlist = [];
 
+const crypto = require('crypto');
+const createHash = crypto.createHash;
+
+/*
+var authroles = [{
+        "name": "basic",
+        "description": "Basic Authorization",
+        "authorizations": [
+            { "endpoint": "/", "methods": ["GET"] },
+            { "endpoint": "/about", "methods": ["GET"] }
+        ]
+    },
+    {
+        "name": "basicWatchers",
+        "description": "Basic Watches",
+        "authorizations": [
+            { "endpoint": "/videostream/*", "methods": ["GET"] },
+            { "endpoint": "/audiostream/play", "methods": ["GET"] }
+        ]
+    },
+    {
+        "name": "streamserverWatchers",
+        "description": "Stream Server Watchers",
+        "authorizations": [
+            { "endpoint": "/play/*", "methods": ["GET"] }
+        ]
+    },
+    {
+        "name": "administrator",
+        "description": "Administrator",
+        "authorizations": [
+            { "endpoint": "*", "methods": ["GET", "POST", "PUT", "DELETE", "PATCH"] }
+        ]
+    }
+]
+
+var users = [
+    { "username": "anonymous", "password": "", "fullname": "Anonymous", "authorizations": { "basic": true, streamserverWatchers: true } },
+    { "username": "teste", "password": "2e6f9b0d5885b6010f9167787445617f553a735f", "fullname": "Teste", "authorizations": { "basic": true } },
+    { "username": "admin", "password": "d033e22ae348aeb5660fc2140aec35850c4da997", "fullname": "Administrator", "authorizations": { "administrator": true } }
+]
+
+*/
+var authroles = [];
+var users = [];
+
+var systempassword = randPass(10, 13);
+
 const { PassThrough } = require("stream").Duplex;
 //const { tunnelteste } = require("stream").Duplex;
 
@@ -30,8 +78,9 @@ var pageTitle = "";
 const bodyParser = require('body-parser');
 const { application, response } = require('express');
 
-
 loadconfig();
+loadAuthRoles();
+loadUsers();
 loadStreamServers();
 getInfo();
 
@@ -59,6 +108,7 @@ app.use(bodyParser.raw());
 app.use(useragent.express());
 
 var pjson = require('../package.json');
+const { request } = require('http');
 //const { isGeneratorFunction } = require('util/types');
 
 
@@ -404,7 +454,7 @@ app.get('/videostream/displaytext', (req, res) => {
 
 app.get('/streamserver/create', (req, res) => {
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     mountStreamServerAdminPage(req, res);
@@ -412,7 +462,7 @@ app.get('/streamserver/create', (req, res) => {
 
 app.get('/streamserver/edit', (req, res) => {
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     var streamserverlistIndex = arrstreamserverlist.findIndex(val => val.streamname === req.query.streamname);
@@ -425,7 +475,7 @@ app.get('/streamserver/edit', (req, res) => {
 
 app.get('/streamserver/status', (req, res) => {
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
 
@@ -436,6 +486,7 @@ app.get('/streamserver/status', (req, res) => {
     var data = "";
     data += `<html>
             <head> 
+            <title>Stream server status</title>
             <link rel="stylesheet" href="/styles.css">
             <link rel="stylesheet" href="/toast.css">
             <script>
@@ -531,7 +582,7 @@ app.get('/streamserver/status', (req, res) => {
 app.get('/streamserver/playlist.m3u', (req, res) => {
     var userpassword = undefined
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
 
@@ -593,7 +644,7 @@ app.get('/videostream/restream', (req, res) => {
     };
 */
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     var output = req.query.output;
@@ -773,19 +824,22 @@ app.get('/videostream/restream', (req, res) => {
 
 });
 
-app.get('/play/*', (req, res) => {
+app.get('/play/:streamname', (req, res) => {
 
 
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
+
+
 
     var streamname = req.path;
     var UUID = generateUUID();
     var arrstreamserverlistIndex = 0;
 
-    streamname = streamname.substring(streamname.lastIndexOf('/') + 1);
+    //streamname = streamname.substring(streamname.lastIndexOf('/') + 1);
+    streamname = req.params.streamname;
     arrstreamserverlistIndex = arrstreamserverlist.findIndex(val => val.streamname === streamname);
     var arrstreamserverfilter = arrstreamserver.filter(value => value.streamname == streamname);
     if (arrstreamserverlistIndex < 0) {
@@ -819,7 +873,7 @@ app.get('/play/*', (req, res) => {
 
 app.get('/api/streamserver/status', (req, res) => {
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     var streamservername = req.query.streamname;
@@ -846,7 +900,7 @@ app.get('/api/streaminfo', (req, res) => {
     };
 */
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
 
@@ -883,7 +937,7 @@ app.get('/api/streaminfo', (req, res) => {
 
 app.get('/api/streamserver', (req, res) => {
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     res.json(getStreamServersListData());
@@ -891,7 +945,7 @@ app.get('/api/streamserver', (req, res) => {
 
 app.post('/api/streamserver', (req, res) => {
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     var mystreamserver = req.body;
@@ -924,7 +978,7 @@ app.post('/api/streamserver', (req, res) => {
 
 app.put('/api/streamserver', (req, res) => {
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     var mystreamserver = req.body;
@@ -968,10 +1022,10 @@ app.put('/api/streamserver', (req, res) => {
 
 app.delete('/api/streamserver', (req, res) => {
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
-    var mystreamserver = req.body;
+    var mystreamserver = { streamname: req.headers.streamname };
     var mystreamserverindex = arrstreamserverlist.findIndex(value => value.streamname === mystreamserver.streamname);
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
@@ -994,7 +1048,7 @@ app.delete('/api/streamserver', (req, res) => {
 
 app.post('/api/streamserver/start', (req, res) => {
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     var body = req.body;
@@ -1015,7 +1069,7 @@ app.post('/api/streamserver/start', (req, res) => {
 
 app.post('/api/streamserver/stop', (req, res) => {
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
 
@@ -1045,7 +1099,7 @@ app.get('/api/checkstream', (req, res) => {
     };
 */
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
 
@@ -1059,15 +1113,121 @@ app.get('/api/checkstream', (req, res) => {
 
 app.get('/api/status', (req, res) => {
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     res.json(processes);
 })
 
+
+app.get('/api/users', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+    res.json(getUsersList());
+});
+
+app.post('/api/users', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+    var newuser = req.body;
+    newuser.password = sha1(newuser.password);
+    newuser.username = encodeURI(newuser.username);
+    // check if user already exists
+
+    if (newuser.username == "system") {
+        res.statusText = "user system is a internal user";
+        res.status(500).json({ useradded: false, message: "user system is a internal user" });
+        return false;
+    }
+
+    var userIndex = users.findIndex(user => user.username == newuser.username);
+    if (userIndex == -1) {
+        users.push(newuser);
+        saveUsers();
+        res.json({ useradded: true, message: "user " + newuser.username + " was created" })
+    } else {
+        res.status(500).json({ useradded: false, message: "user " + newuser.username + " already exists" })
+    }
+});
+
+app.put('/api/users', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+
+
+    var changeuser = req.body;
+
+    if (changeuser.username == "system") {
+        res.statusText = "user system is a internal user";
+        res.status(500).json({ useradded: false, message: "user system is a internal user" });
+        return false;
+    }
+
+    var userIndex = users.findIndex(user => user.username == changeuser.username);
+    if (userIndex == -1) {
+        res.statusText = "user " + changeuser.username + "doesn exists";
+        res.status(500).json({ userchanged: false, message: "user " + changeuser.username + "doesn exists" })
+    } else {
+        for (var key in changeuser) {
+            if (changeuser[key] != undefined) {
+                users[userIndex][key] = changeuser[key];
+                log(`field ${key} changed to ${changeuser[key]}`)
+            }
+        }
+
+
+        saveUsers();
+        res.status(200).json({ userchanged: true, message: "user " + changeuser.username + " has been updated" })
+    }
+})
+
+app.delete('/api/users', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+    //var deleteuser = req.body;
+    var deleteuser = { username: req.headers.username }
+    var userIndex = users.findIndex(user => user.username == deleteuser.username);
+    if (userIndex == -1) {
+        res.statusText = "user " + deleteuser.username + "doesn exists";
+        res.status(500).json({ userdeleted: false, message: "user " + deleteuser.username + "doesn exists" })
+    } else {
+        users = users.filter(user => user.username != deleteuser.username);
+        saveUsers();
+        res.status(200).json({ userdeleted: true, message: "user " + deleteuser.username + " has been deleted" })
+    }
+});
+
+app.put('/api/users/changepassword', (req, res) => {
+    const b64auth = (req.headers.authorization || '').split(' ')[1] || ''
+    const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
+
+    if (login == "" || login == undefined) {
+        res.set('WWW-Authenticate', 'Basic realm="401"') // change this
+        res.status(401).send('Authentication required.') // custom message
+        return false;
+    }
+    var userIndex = users.findIndex(user => user.username == login);
+    if (userIndex < 0) {
+        res.status(500).send('Internal Server Error');
+        return false;
+    }
+    var newpassword = req.body.password;
+    users[userIndex].password = sha1(newpassword);
+    saveUsers();
+    res.status(200).json({ passwordchanged: true });
+});
+
 app.get('/debug', (req, res) => {
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     res.json(debug);
@@ -1098,7 +1258,7 @@ app.get('/info', (req, res) => {
         };
     */
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     //var timestamp = new Date().getTime();
@@ -1114,7 +1274,7 @@ app.get('/clientinfo', (req, res) => {
 
 app.get('/api/log', (req, res) => {
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     res.json(logdata);
@@ -1122,7 +1282,7 @@ app.get('/api/log', (req, res) => {
 
 app.post('/api/clearlog', (req, res) => {
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     try {
@@ -1136,11 +1296,12 @@ app.post('/api/clearlog', (req, res) => {
 
 app.get('/log', (req, res) => {
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     var htmldata = "";
     htmldata += `<header>
+    <title>log</title>
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/toast.css">
     <script>
@@ -1250,7 +1411,12 @@ app.get('/log', (req, res) => {
 })
 
 app.get('/teste', (req, res) => {
-    res.send(req.headers.authorization);
+    if (req.query.password == undefined) {
+        res.send(req.headers.authorization);
+    } else {
+        res.send("hashed password => " + sha1(req.query.password))
+    }
+
     //req.pipe(tunnelteste);
 })
 
@@ -1268,7 +1434,7 @@ app.post('/api/killProcess', (req, res) => {
     // check if user is authenticated
 
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     try {
@@ -1303,21 +1469,25 @@ app.get('/logout', (req, res) => {
 })
 
 app.get('/stopserver', (req, res) => {
-    if (basicAuth(req, res).authenticated == false) { //if authentication is required and fail, return 401
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     res.send("<h1>server will be stopped</h1>");
     process.exit(0);
 });
 
-
-
+/*
+app.get('/restartserver', (req, res) => {
+    restartProgram();
+})
+*/
 
 
 app.get('/status', (req, res) => {
 
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
 
@@ -1328,6 +1498,7 @@ app.get('/status', (req, res) => {
     var data = "";
     data += `<html>
             <head> 
+            <title>Status Page</title>
             <link rel="stylesheet" href="/styles.css">
             <link rel="stylesheet" href="/toast.css">
             <script>
@@ -1506,7 +1677,7 @@ app.get('/status', (req, res) => {
 
 app.get('/streamserver/list', (req, res) => {
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
 
@@ -1517,6 +1688,7 @@ app.get('/streamserver/list', (req, res) => {
     var data = "";
     var data = `<html>
     <head> 
+    <title> Stream Server Manager</title>
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/toast.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
@@ -1524,16 +1696,26 @@ app.get('/streamserver/list', (req, res) => {
     <script>
     var totallines = 0;
         var totallinesant = 0;
+        `
+    if (req.headers.authorization != undefined) {
+        data += `var authorization = '${req.headers.authorization};'
+            `
+    } else {
+        data += `var authorization = '';
+            `
+    }
+    data += `    
+
     function startStreamServer(streamname){
     
     var statusData = undefined;
-    
+   
         try{
             ProcessHTML = fetch('/api/streamserver/start', {
             headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
-            'Authorization': '${req.headers.authorization}'
+            'Authorization': authorization
              },
               method: 'POST',
               body: JSON.stringify({streamname: streamname})
@@ -1568,7 +1750,7 @@ app.get('/streamserver/list', (req, res) => {
                 headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
-                'Authorization': '${req.headers.authorization}'
+                'Authorization': authorization
                  },
                   method: 'POST',
                   body: JSON.stringify({streamname: streamname})
@@ -1604,10 +1786,10 @@ app.get('/streamserver/list', (req, res) => {
                     headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
-                    'Authorization': '${req.headers.authorization}'
+                    'Authorization': authorization,
+                    'streamname': streamname
                      },
-                      method: 'DELETE',
-                      body: JSON.stringify({streamname: streamname})
+                      method: 'DELETE'
                      }).then(response =>{
                        
                         if(response.status == 200){
@@ -1842,11 +2024,201 @@ app.get('/streamserver/list', (req, res) => {
     res.send(data);
 });
 
+app.get('/user/list', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+
+    //appsetheader(res);
+    var catsize = 'KB';
+    var datasize = 0;
+
+    var data = "";
+    var data = `<html>
+    <head> 
+    <title>User Manager</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/toast.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+    <script>
+    var totallines = 0;
+        var totallinesant = 0;
+   
+
+
+         function deleteUser(user){
+    
+            var statusData = undefined;
+            if(confirm('Are you sure you want to delete the user '+user+'?')){
+                try{
+                    ProcessHTML = fetch('/api/users', {
+                    headers: { 
+                        'Accept': 'application/json',
+                        'username': user, 
+                        `
+    if (req.headers.authorization != undefined) {
+        data += `'Content-Type': 'application/json',
+                        'Authorization': '${req.headers.authorization}' 
+                        `
+    } else {
+        data += `'Content-Type': 'application/json' 
+                        `
+    }
+    data += `
+                     },
+                      method: 'DELETE'
+                     }).then(response =>{
+                       
+                        if(response.status == 200){
+                        
+                        displayToast("green","user "+user+" has deleted");
+                       }
+                       else{
+                        displayToast("red","error HTTP "+response.status+" "+response.statusText);
+                       }
+                       
+                       
+                       
+                       });
+                    
+                     
+                     
+            }
+            catch (e) {
+                displayToast("red","error: "+e.message);
+            }
+        }
+             }
+
+
+     
+
+     function addUser(){
+        document.location = '/user/create';
+     }
+
+     function editUser(user){
+        document.location = '/user/edit?username='+user;
+     }
+
+
+
+     function displayToast(color,text) {
+        var x = document.getElementById("snackbar");
+        x.className = "show";
+        x.innerHTML = text;
+        x.style.backgroundColor = color;
+        setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
+      }
+
+      function getStatusData(){
+        
+        const date = new Date();
+        var datasize = 0;
+        
+        let xhr = new XMLHttpRequest();
+        xhr.open('GET', '/api/users');
+        xhr.responseType = 'json';
+        xhr.send();
+        xhr.onload = function() {
+            let responseObj = xhr.response;
+              
+                mountStatus(responseObj);
+                
+                
+            
+           
+          };
+          
+
+      
+      }
+
+
+      
+      function mountStatus(responseObj) {
+        var htmlData = "";
+        var index = 0;
+       
+       
+
+        totallines = responseObj.length;
+        if(totallines != totallinesant || document.getElementById("status").innerHTML == ""){
+            totallinesant = totallines;
+           
+            
+   
+        htmlData += "<table>";
+        htmlData += "<tr>";
+        htmlData += "<th width='40%'>username</th>";
+        htmlData += "<th width='50%'>Full Name</th>";
+       
+        htmlData += "<th width='10%'>Command</th>";
+        htmlData += "<th></th>";
+        htmlData += "</tr>";
+        
+        responseObj.forEach(function(table) {
+            var username = '\\''+table.username+'\\'';
+            datasize = table.dataSize;
+          
+          htmlData += '<tr id="'+table.username+'">';
+          
+          htmlData += '<td width="40%">'+table.username+'</td>';
+          
+          htmlData += '<td width="50%">'+table.fullname+'</td>';
+         
+          htmlData += '<td width="10%" >'
+          htmlData += '<button onclick="editUser('+username+')" id="'+table.username+':edit" class="listbutton listbutton-blue"><i class="fa fa-edit"></i> Edit</button>  '
+          if(table.username == "anonymous"){
+            htmlData += '<button onclick="deleteUser('+username+')" id="'+table.username+':delete" class="listbutton listbutton-red" disabled><i class="fa fa-trash-alt"></i> Delete</button>  '
+          } else {
+            htmlData += '<button onclick="deleteUser('+username+')" id="'+table.username+':delete" class="listbutton listbutton-red"><i class="fa fa-trash-alt"></i> Delete</button>  '
+          }
+          
+          htmlData += '</td>';
+          htmlData += '</tr>';
+         
+        });
+       
+        htmlData += '</table>';
+   
+    
+        htmlData += '</body>';
+        htmlData += '</html>';
+        document.getElementById("status").innerHTML = htmlData;
+    } else {
+        index = 0;
+        
+       
+    }
+   
+}
+function startTimer() {
+    getStatusData();
+    setInterval(getStatusData, 1000);  
+}
+
+     
+
+      
+    ${commonFrontendFunctionsGet()}   
+
+    </script>   
+    </head>
+    <body onload="startTimer()">
+    <button onclick="addUser()"  class="listbutton listbutton-blue" id="addStreamServer"><i class="fa fa-plus"></i> Add User</button>  
+    <div id="status"></div>
+    <div id="snackbar">Some text some message..</div>`
+    res.send(data);
+})
+
 app.get('/status/*', (req, res) => {
     var pidtoSee = req.path;
     var data = "";
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     pidtoSee = pidtoSee.substring(pidtoSee.lastIndexOf('/') + 1);
@@ -1863,6 +2235,7 @@ app.get('/status/*', (req, res) => {
 
     data += `<html>
     <head> 
+    <title>Status of PID ${pidtoSee}</title>
     <style>
     table {
     border-collapse: collapse;
@@ -1911,12 +2284,21 @@ app.get('/status/*', (req, res) => {
 
 
 app.get('/', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+
     res.set({ 'Server': 'streamproxy' });
     res.redirect("/about");
 });
 
 // help page, captured from github pages
 app.get('/about', async function(req, res) {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
     const port = getPortCalled(req)
     const https = require("https");
     const serversearch = "&lt;serverip&gt;";
@@ -1953,6 +2335,24 @@ app.get('/about', async function(req, res) {
 
 });
 
+app.get('/docs/api', (req, res) => {
+    var html = `<!doctype html> <!-- Important: must specify -->
+ <html>
+ <head>
+   <title>StreamProxy API Documentation</title>
+   <meta charset="utf-8"> <!-- Important: rapi-doc uses utf8 characters -->
+   <script type="module" src="https://unpkg.com/rapidoc/dist/rapidoc-min.js"></script>
+ </head>
+ <body>
+   <rapi-doc
+     spec-url="https://stoplight.io/api/v1/projects/asabino/streamproxy/nodes/apidoc.yaml"
+     theme = "dark"
+     show-header = false
+     sort-endpoints-by = "none"
+   > </rapi-doc>
+ </body>`
+    res.send(html);
+});
 
 app.get('/styles.css', (req, res) => {
     var data = "";
@@ -2145,7 +2545,257 @@ app.get('/toast.css', (req, res) => {
     res.send(data);
 });
 
+app.get('/user/create', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+    mountUserAdminPage(req, res, "POST");
+});
 
+app.get('/user/edit', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+    var username = req.query.username;
+    var user = users.find(value => value.username == username)
+    mountUserAdminPage(req, res, "PUT", user);
+});
+
+app.get('/changepassword', (req, res) => {
+    var html = "";
+    const b64auth = (req.headers.authorization || '').split(' ')[1] || ''
+    const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
+
+    if (login == "" || login == undefined) {
+        res.set('WWW-Authenticate', 'Basic realm="401"') // change this
+        res.status(401).send('Authentication required.') // custom message
+        return false;
+    }
+
+
+
+
+
+    html += `<html>
+    <head>
+    <title>Change Password</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/toast.css">`;
+
+    //styles
+    html += `<style>
+    
+    
+    
+    .label {
+      position: absolute;
+        /*left: 42%; */
+       
+    }
+    
+    .secondaryinput {
+      position: absolute;
+      /*  left: 42%; */
+       width: 800px;
+       height: 30px;
+       border-radius: 5px;
+       
+       
+    }
+    
+    
+    #main {
+      width: 100%;
+    }
+    
+    #forms {
+      position: relative;
+      top: 30px;
+      width:800px;
+      margin: auto;
+      
+    }
+    
+    
+   
+    #logdiv {
+        position: relative;
+        border:  1px solid black;
+        width: 1300px;
+        height: 500px;
+        margin: auto;
+        top: 200px;
+      }
+
+    #maintainuserbutton {
+                   /* transform: translatex(1180px) translatey(352px);*/
+                   /* min-height: 35px; */
+                     position: relative;
+                     width: 186px;
+                     
+                     
+                                 text-decoration: none;
+                                 border: none;
+                                 padding: 12px 40px;
+                                 font-size: 16px;
+                                 background-color: blue;
+                                 color: #fff;
+                                 border-radius: 5px;
+                                 box-shadow: 7px 6px 28px 1px rgba(0, 0, 0, 0.24);
+                                 cursor: pointer;
+                                 outline: none;
+                                 transition: 0.2s all;
+                             }
+                 
+                             #maintainuserbutton:active {
+                                 transform: scale(0.98);
+                                 
+                                 box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
+                                 
+                             } 
+                             #maintainuserbutton:disabled {
+                                background-color: gray;
+                             }  
+
+
+    #resetbutton {
+                    /* transform: translatex(1180px) translatey(352px);*/
+                    /* min-height: 35px; */
+                        position: relative;
+                        width: 186px;
+                                  
+                                  
+                        text-decoration: none;
+                        border: none;
+                        padding: 12px 40px;
+                        font-size: 16px;
+                        background-color: red;
+                        color: #fff;
+                        border-radius: 5px;
+                        box-shadow: 7px 6px 28px 1px rgba(0, 0, 0, 0.24);
+                        cursor: pointer;
+                        outline: none;
+                        transition: 0.2s all;
+                        }
+                              
+                        #resetbutton:active {
+                            transform: scale(0.98);
+                                              
+                            box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
+                                              
+                            } 
+                        #resetbutton:disabled {
+                            background-color: gray;
+                            }  
+                             
+    </style>`
+        /* Scripts */
+    html += `<script>
+    ${commonFrontendFunctionsGet()}
+    
+    function maintainpassword(){
+       
+       
+       var password =  document.getElementById("password").value;
+     
+   
+    //document.getElementById("logdiv").innerHTML = "processing....";
+    document.getElementById("maintainuserbutton").disabled = true;
+
+    fetch("/api/users/changepassword", {
+        method: "PUT",
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': '${req.headers.authorization}'
+        },
+        body: JSON.stringify({password: password})
+    }).then(
+        response => {
+
+            if (response.status != 200) {
+                displayToast("red","Error "+response.status+" "+response.statusText);
+                document.getElementById("maintainuserbutton").disabled = false;
+            }
+            return response.text();
+        }).then(
+        data => {
+            var response = JSON.parse(data);
+            document.getElementById("maintainuserbutton").disabled = false;
+          if (response.passwordchanged == true) {
+                //document.getElementById("logdiv").innerHTML = "<h2>password changed<h2>";
+                displayToast("green","password changed");
+                
+                //alert("stream server has added in list");
+               
+                resetData();
+
+     
+        enabledisablefields()
+        window.location.assign("/")
+       
+    
+           
+            } else {
+                displayToast("red","Error on execute: " + response.message);
+                
+
+            }
+        });
+}
+
+    function enabledisablefields() {
+        
+
+    }
+
+    function checkForSpecialCharacter(text) {
+        //  const format = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/; // removed because javascript error
+        // return format.test(text);
+        //return false;
+    }
+
+    function onlyNumbers(str) {
+        return /^[0-9]+$/.test(str);
+    }
+
+    function resetData(){
+        document.getElementById("password").value = "";
+        
+        }
+    </script>
+    </head>
+    <body>
+      <div id="main">
+        <center><h1>Change Password for user ${login}</h1></center>
+        <h2><center><center></h2>
+      <div id="forms">
+     
+        <!-- password-->
+          <div id="passworddiv" >
+             <label class="label">Password:</label> <br>
+          <input type="password" id="password" name="password" class="secondaryinput" size="50" value=""/><br /><br /><br />
+        </div>
+        
+                    
+                    
+
+                    
+     <center>
+     <button onclick="maintainpassword()" id="maintainuserbutton" >Save</button>
+     <button onclick="resetData()" id="resetbutton" >Reset</button>
+     </center>
+   </div>
+  
+   <div id="snackbar">Some text some message..</div>
+     </div>                
+                         </body>
+                         </html>`;
+
+    res.send(html);
+})
 
 var server = app.listen(config.port);
 
@@ -2366,7 +3016,7 @@ function getPageTitle(url) {
 }
 
 function appsetheader(res) {
-    res.set({ 'Server': 'streamproxy' });
+    res.set({ 'Server': 'asabino2.streamproxy' });
 }
 
 function checkToken(req, res) {
@@ -2411,20 +3061,45 @@ function setDataSize(PID, data) {
 
 
 function basicAuth(req, res) {
-    if (config.basicAuthentication == undefined) {
-        return { authenticated: true, user: undefined, auth: undefined };
+    const b64systemAuth = req.headers.systemauthorization;
+    var user = "";
+    if (b64systemAuth != undefined) {
+        const [login, password] = Buffer.from(b64systemAuth, 'base64').toString().split(':');
+        if (login == "system") {
+            if (password == systempassword) {
+                return { authenticated: true, user: "system", auth: undefined, authorized: true };
+
+            }
+        }
     }
-    if (config.basicAuthentication.active != true) {
-        return { authenticated: true, user: undefined, auth: undefined };
+
+    if ((req.headers.authorization == undefined || req.headers.authorization == "") && req.path != "/login") {
+        user = "anonymous";
+        var isAuthorized = checkAuthorization(req, user);
+        if (isAuthorized == true) {
+            return { authenticated: true, user: user, auth: undefined, authorized: true };
+        }
     }
     const b64auth = (req.headers.authorization || '').split(' ')[1] || ''
     const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
 
-    authdataconfig = config.basicAuthentication.users.find(item => item.username == login)
+
+
+
+
+
+    authdataconfig = users.find(item => item.username == login)
     if (authdataconfig != undefined) {
 
-        if (authdataconfig.password == password) { // login successfully
-            return { authenticated: true, user: login, auth: b64auth };
+        if (authdataconfig.password == sha1(password)) { // login successfully, check if authorized
+            var isAuthorized = checkAuthorization(req, login);
+            if (isAuthorized == true && login != "anonymous" && login != "system") {
+                return { authenticated: true, user: login, auth: b64auth, authorized: true };
+            } else {
+                res.status(403).end();
+                return { authenticated: true, user: login, auth: b64auth, authorized: false };
+            }
+
         } else {
 
             res.set('WWW-Authenticate', 'Basic realm="401"') // change this
@@ -2816,7 +3491,7 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
 
 
     var auth = basicAuth(req, res);
-    if (auth.authenticated == false) {
+    if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
 
@@ -3180,6 +3855,9 @@ function startStreamServer(streamname, req) {
     var arrstreamserverlistnew = getStreamServersListData();
     var mystreamserverIndex = arrstreamserverlistnew.findIndex(val => val.streamname === streamname);
     var response = {};
+    var userpass = "system:" + systempassword;
+    userpass = Buffer.from(userpass).toString('base64');
+
     if (mystreamserverIndex < 0) {
         response.status = 404;
         response.statusMessage = "streamserver " + streamname + " not found";
@@ -3321,19 +3999,28 @@ function startStreamServer(streamname, req) {
 
     const http = require("http");
     var options = {};
-    if (req.headers.authorization != undefined) {
-        options = {
-            port: config.port,
-            path: streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title,
-            headers: { authorization: req.headers.authorization }
-        }
-    } else {
-        options = {
-            port: config.port,
-            path: streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title
+    /*
+        if (req.headers.authorization != undefined) {
+            options = {
+                port: config.port,
+                path: streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title,
+                headers: { authorization: req.headers.authorization }
+            }
+        } else {
+            options = {
+                port: config.port,
+                path: streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title
 
+            }
         }
+    */
+
+    options = {
+        port: config.port,
+        path: streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title,
+        headers: { systemAuthorization: userpass }
     }
+
     http.get(options, (resp) => {
         let data = '';
 
@@ -3440,7 +4127,7 @@ function stopStreamServer(streamservername) {
 function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
     var html = "";
 
-    /**/
+
 
     if (actualdata == undefined) {
         actualdata = { streamname: "", streamdescription: "", streamdescription: "", channelnumber: "", logourl: "", streammethod: "/videostream/streamlink", streamprovider: "", videoformat: "", videocodec: "", framesize: "", framerate: "", audiocodec: "", title: "", url: "" }
@@ -3489,6 +4176,15 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
     // main header
     html += `<html>
     <head>
+    `
+    if (method == "POST") {
+        html += `<title>Create a Stream server</title>
+        `
+    } else if (method == "PUT") {
+        html += `<title>Edit stream Server ${actualdata.streamname}</title>
+        `
+    }
+    `
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/toast.css">`;
 
@@ -3609,6 +4305,7 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
     </style>`
         /* Scripts */
     html += `<script>
+    ${commonFrontendFunctionsGet()}
     function start(){
         document.getElementById("streammethod").value = "${pagedata.mainfields.methoddefault}";
         `
@@ -3770,22 +4467,32 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
 
     //alert("teste")
     //window.location.href = urltocall;
-    document.getElementById("logdiv").innerHTML = "processing....";
+    //document.getElementById("logdiv").innerHTML = "processing....";
     document.getElementById("maintainserverbutton").disabled = true;
 
     fetch("/api/streamserver", {
         method: "${method}",
         headers: {
             'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Authorization': '${req.headers.authorization}'
+            
+            `
+    if (req.headers.authorization != undefined) {
+        html += `'Content-Type': 'application/json',
+                     'Authorization': '${req.headers.authorization}'
+            `
+    } else {
+        html += `'Content-Type': 'application/json'
+       `
+    }
+    html += `
+            
         },
         body: JSON.stringify(streamserverdata)
     }).then(
         response => {
 
-            if (response.status == 200) {
-
+            if (response.status != 200) {
+                displayToast("red","Error "+response.status+" "+response.statusText);
             }
             return response.text();
         }).then(
@@ -3796,11 +4503,13 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
 
     if (method == "POST") {
         html += `if (response.streamadded == true) {
-                document.getElementById("logdiv").innerHTML = "<h2>stream server has added in list<h2>";
+                //document.getElementById("logdiv").innerHTML = "<h2>stream server has added in list<h2>"
+                displayToast("green","stream server has added in list");
                 `
     } else {
         html += `if (response.streamchanged == true) {
-                document.getElementById("logdiv").innerHTML = "<h2>stream server has change<h2>";
+                //document.getElementById("logdiv").innerHTML = "<h2>stream server has change<h2>";
+                displayToast("green","stream server has changed");
                 `
     }
     html += `
@@ -3983,9 +4692,334 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
      </center>
    </div>
    </div>
-   <div id="logdiv">
+   <div id="snackbar">Some text some message..</div>
+     </div>  `
+    html += `               
+                         </body>
+                         </html>`;
+
+    res.send(html);
+}
+
+
+function mountUserAdminPage(req, res, method = "POST", actualdata) {
+    // main header
+    var html = "";
+
+    if (actualdata == undefined) {
+        actualdata = { username: "", fullname: "", password: "", authorizations: {} }
+        authroles.forEach(role => {
+            actualdata.authorizations[role.name] = false;
+        });
+
+    }
+
+    html += `<html>
+    <head>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/toast.css">`;
+
+    //styles
+    html += `<style>
+    
+    
+    
+    .label {
+      position: absolute;
+        /*left: 42%; */
+       
+    }
+    
+    .secondaryinput {
+      position: absolute;
+      /*  left: 42%; */
+       width: 800px;
+       height: 30px;
+       border-radius: 5px;
+       
+       
+    }
+    
+    
+    #main {
+      width: 100%;
+    }
+    
+    #forms {
+      position: relative;
+      top: 30px;
+      width:800px;
+      margin: auto;
+      
+    }
+    
+    
    
-     </div>
+    #logdiv {
+        position: relative;
+        border:  1px solid black;
+        width: 1300px;
+        height: 500px;
+        margin: auto;
+        top: 200px;
+      }
+
+    #maintainuserbutton {
+                   /* transform: translatex(1180px) translatey(352px);*/
+                   /* min-height: 35px; */
+                     position: relative;
+                     width: 186px;
+                     
+                     
+                                 text-decoration: none;
+                                 border: none;
+                                 padding: 12px 40px;
+                                 font-size: 16px;
+                                 background-color: blue;
+                                 color: #fff;
+                                 border-radius: 5px;
+                                 box-shadow: 7px 6px 28px 1px rgba(0, 0, 0, 0.24);
+                                 cursor: pointer;
+                                 outline: none;
+                                 transition: 0.2s all;
+                             }
+                 
+                             #maintainuserbutton:active {
+                                 transform: scale(0.98);
+                                 
+                                 box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
+                                 
+                             } 
+                             #maintainuserbutton:disabled {
+                                background-color: gray;
+                             }  
+
+
+    #resetbutton {
+                    /* transform: translatex(1180px) translatey(352px);*/
+                    /* min-height: 35px; */
+                        position: relative;
+                        width: 186px;
+                                  
+                                  
+                        text-decoration: none;
+                        border: none;
+                        padding: 12px 40px;
+                        font-size: 16px;
+                        background-color: red;
+                        color: #fff;
+                        border-radius: 5px;
+                        box-shadow: 7px 6px 28px 1px rgba(0, 0, 0, 0.24);
+                        cursor: pointer;
+                        outline: none;
+                        transition: 0.2s all;
+                        }
+                              
+                        #resetbutton:active {
+                            transform: scale(0.98);
+                                              
+                            box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
+                                              
+                            } 
+                        #resetbutton:disabled {
+                            background-color: gray;
+                            }  
+                             
+    </style>`
+        /* Scripts */
+    html += `<script>
+    ${commonFrontendFunctionsGet()}
+    
+    function maintainuser(){
+       var user = {username: "",  password: undefined, fullname: "", authorizations: {}};
+       
+       user.username = document.getElementById("username").value;
+       user.fullname = document.getElementById("fullname").value;
+    `
+    if (method == "POST") {
+        html += `user.password = document.getElementById("password").value;
+        `
+    }
+    authroles.forEach(role => {
+        html += `user.authorizations.${role.name} = document.getElementById("authrole_${role.name}").checked;
+        `
+    })
+    html += `
+    //document.getElementById("logdiv").innerHTML = "processing....";
+    document.getElementById("maintainuserbutton").disabled = true;
+
+    fetch("/api/users", {
+        method: "${method}",
+        headers: {
+            'Accept': 'application/json', 
+            `
+    if (req.headers.authorization != undefined) {
+        html += `'Content-Type': 'application/json',
+            'Authorization': '${req.headers.authorization}'
+             `
+    } else {
+        html += `'Content-Type': 'application/json'
+                 `
+    }
+    html += `
+        },
+        body: JSON.stringify(user)
+    }).then(
+        response => {
+
+            if (response.status != 200) {
+                displayToast("red","Error "+response.status+" "+response.statusText);
+                document.getElementById("maintainuserbutton").disabled = false;
+            }
+            return response.text();
+        }).then(
+        data => {
+            var response = JSON.parse(data);
+            document.getElementById("maintainuserbutton").disabled = false;
+            `
+
+    if (method == "POST") {
+        html += `if (response.useradded == true) {
+                //document.getElementById("logdiv").innerHTML = "<h2>user created<h2>"
+                displayToast("green","user created");
+                `
+    } else {
+        html += `if (response.userchanged == true) {
+                //document.getElementById("logdiv").innerHTML = "<h2>user changed<h2>";
+                displayToast("green","user changed");
+                `
+    }
+    html += `
+                //alert("stream server has added in list");
+               
+                `
+
+    if (req.headers.referer != undefined) {
+        if (req.headers.referer.indexOf('/user/list') > -1) {
+            html += `window.location.assign("${req.headers.referer}");
+        `;
+        }
+    } else {
+        html += `resetData();
+     
+        enabledisablefields()
+        `
+    }
+    html += `
+    
+           
+            } else {
+                displayToast("red","Error on execute: " + response.message);
+                
+
+            }
+        });
+}
+
+    function enabledisablefields() {
+        
+
+    }
+
+    function checkForSpecialCharacter(text) {
+        //  const format = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/; // removed because javascript error
+        // return format.test(text);
+        //return false;
+    }
+
+    function onlyNumbers(str) {
+        return /^[0-9]+$/.test(str);
+    }
+
+    function resetData(){
+        document.getElementById("username").value = "${actualdata.username}";
+        document.getElementById("fullname").value = "${actualdata.fullname}";`
+    if (method == "POST") {
+        html += `document.getElementById("password").value = "";
+        `
+    }
+
+    authroles.forEach(role => {
+        html += `document.getElementById("authrole_${role.name}").checked = ${actualdata.authorizations[role.name]}
+        `
+    })
+    html += `
+        }
+    </script>
+    </head>
+    <body>
+      <div id="main">`
+    if (method == "POST") {
+        html += `
+        <center><h1>Create User</h1></center>
+        <h2><center>use this page to create a new user<center></h2>`
+    } else if (method == "PUT") {
+        html += `
+        <center><h1>Edit user ${actualdata.username}</h1></center>
+        <h2><center><center></h2>`
+    }
+
+
+    html += `
+      <div id="forms">
+      <!-- streamname -->
+            <div id="userdiv" > 
+          <label  for="username" class="label" id="teste">Username:</label><br>
+          `
+    if (method == "POST") {
+        html += `<input id="username" name="username" class="secondaryinput" size="50" value=""/><br /><br /><br /> 
+           `
+    } else if (method == "PUT") {
+        html += `<input id="username" name="username" class="secondaryinput" size="50" value="${actualdata.username}" disabled = "true"/><br /><br /><br /> 
+            `
+    }
+    html += `
+        </div>
+      <!-- Full Name-->
+          <div id="fullnamediv" >
+             <label class="label">Full Name:</label> <br>
+          <input id="fullname" name="fullname" class="secondaryinput" size="50" value="${actualdata.fullname}"/><br /><br /><br />
+        </div>
+        `
+    if (method == "POST") {
+        html += `
+        <!-- password-->
+          <div id="passworddiv" >
+             <label class="label">Password:</label> <br>
+          <input type="password" id="password" name="password" class="secondaryinput" size="50" value="${actualdata.password}"/><br /><br /><br />
+        </div>
+        `
+    }
+    html += `
+                   <div id="rolesdiv">
+                   <fieldset>
+                    <legend> Authorization Roles </legend>
+                    `
+    authroles.forEach(role => {
+        html += `<div>
+                        `
+        if (actualdata.authorizations[role.name] == true) {
+            html += `<input type="checkbox" id="authrole_${role.name}" name="${role.name}" checked>
+                         `
+        } else {
+            html += `<input type="checkbox" id="authrole_${role.name}" name="${role.name}" >
+                            `
+        }
+        html += `<label for="authrole_${role.name}">${role.description}</label>
+                        </div>
+                        `
+    })
+    html += `</fieldset>
+                    </div>
+
+                    
+     <center>
+     <button onclick="maintainuser()" id="maintainuserbutton" >Save</button>
+     <button onclick="resetData()" id="resetbutton" >Reset</button>
+     </center>
+   </div>
+   </div>
+   <div id="snackbar">Some text some message..</div>
      </div>  `
     html += `               
                          </body>
@@ -4037,7 +5071,240 @@ function saveStreamServers() {
     }
 }
 
+function checkAuthorization(req, user) {
+    var userIndex = users.findIndex(val => val.username === user);
+    var user = users[userIndex];
+    var isAuthorized = false;
+    var rolesForThisEndpoint = [];
+    var endpointnow = [];
+    var endpointsfilter = [];
+    endpointnow.push(req.path);
 
 
+    var path = req.path;
+
+    authroles.forEach(role => {
+        /*
+        if (role.authorizations.findIndex(authorization => authorization.endpoint === path && authorization.method === req.method) > -1) {
+            rolesForThisEndpoint.push(role.name);
+        }
+        */
+        role.authorizations.forEach(authorization => {
+            endpointsfilter = endpointnow.filter(x => wildTest(authorization.endpoint, x));
+            authorization.methods.forEach(method => {
+                if (endpointsfilter.length > 0 && method == req.method) {
+                    if (rolesForThisEndpoint.findIndex(y => y === role.name) < 0) {
+                        rolesForThisEndpoint.push(role.name);
+                    }
+                }
+            })
+
+        })
+
+
+    })
+
+    for (var key in user.authorizations) {
+        if (user.authorizations[key] == true && rolesForThisEndpoint.findIndex(role => role === key) > -1) {
+            isAuthorized = true;
+            return true;
+        }
+    }
+
+    return isAuthorized;
+
+}
+
+
+function randPass(lettersLength, numbersLength) {
+    var j, x, i;
+    var result = '';
+    var letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    var numbers = '0123456789';
+    for (i = 0; i < lettersLength; i++) {
+        result += letters.charAt(Math.floor(Math.random() * letters.length));
+    }
+    for (i = 0; i < numbersLength; i++) {
+        result += numbers.charAt(Math.floor(Math.random() * numbers.length));
+    }
+    result = result.split("");
+    for (i = result.length - 1; i > 0; i--) {
+        j = Math.floor(Math.random() * (i + 1));
+        x = result[i];
+        result[i] = result[j];
+        result[j] = x;
+    }
+    result = result.join("");
+    return result
+}
+
+function wildTest(wildcard, str) {
+    let w = wildcard.replace(/[.+^${}()|[\]\\]/g, '\\$&'); // regexp escape 
+    const re = new RegExp(`^${w.replace(/\*/g,'.*').replace(/\?/g,'.')}$`, 'i');
+    return re.test(str); // remove last 'i' above to have case sensitive
+}
+
+function sha1(txt) {
+    return createHash('sha1') // <-- You can use other than sha1
+        .update(txt) //set what to encode
+        .digest('hex') //basically another way to encode. hex is base16 so for example doing .digest('base64') encodes 4x more effenciently
+}
+
+
+function getUsersList() {
+    return users;
+}
+
+function getRolesList() {
+    return authroles;
+}
+
+function restartProgram() {
+    var child_process = require('child_process');
+
+    process.on('SIGINT', function() {
+        console.log('restarting...');
+        child_process.fork(__filename); // TODO: pass args...
+        process.exit(0);
+    });
+
+    console.log('Running as %d', process.pid);
+
+    setTimeout(function() {}, 1000000); // just some code to keep the process running
+}
+
+
+function loadUsers() {
+
+    var isMigrated = false;
+    try {
+        const fs = require("fs");
+        const jsonString = fs.readFileSync("./streamproxy.users.json");
+        users = JSON.parse(jsonString);
+
+    } catch (err) {
+
+
+
+        users = [
+            { "username": "anonymous", "password": "", "fullname": "Anonymous", "authorizations": { "basic": true, streamserverWatchers: true } },
+            { "username": "admin", "password": "d033e22ae348aeb5660fc2140aec35850c4da997", "fullname": "Administrator", "authorizations": { "administrator": true } }
+        ]
+        if (config.basicAuthentication != undefined) {
+            try {
+                config.basicAuthentication.users.forEach(user => {
+                    users.push({ username: user.username, fullname: "", password: sha1(user.password), authorizations: { administrator: true } });
+                    isMigrated = true;
+                });
+            } catch (e) {
+                console.log("error: " + e.message);
+            }
+        }
+
+        if (isMigrated == true) {
+            config.basicAuthentication = undefined;
+            const fswrite = require("fs");
+            try {
+                var configstr = JSON.stringify(config);
+
+                fswrite.writeFileSync("./streamproxy.config.json", configstr);
+            } catch (err) {
+
+            }
+        }
+
+        const fswriteuser = require("fs");
+        try {
+            var usersstr = JSON.stringify(users);
+
+            fswriteuser.writeFileSync("./streamproxy.users.json", usersstr);
+        } catch (err) {
+
+        }
+
+
+    }
+
+
+}
+
+function saveUsers() {
+    const fswriteuser = require("fs");
+    try {
+        var usersstr = JSON.stringify(users);
+
+        fswriteuser.writeFileSync("./streamproxy.users.json", usersstr);
+    } catch (err) {
+
+    }
+}
+
+function loadAuthRoles() {
+
+    try {
+        const fs = require("fs");
+        const jsonString = fs.readFileSync("./streamproxy.authroles.json");
+        authroles = JSON.parse(jsonString);
+    } catch (err) {
+
+        authroles = [{
+                "name": "basic",
+                "description": "Basic Authorization",
+                "authorizations": [
+                    { "endpoint": "/", "methods": ["GET"] },
+                    { "endpoint": "/about", "methods": ["GET"] }
+                ]
+            },
+            {
+                "name": "basicWatchers",
+                "description": "Basic Watches",
+                "authorizations": [
+                    { "endpoint": "/videostream/*", "methods": ["GET"] },
+                    { "endpoint": "/audiostream/play", "methods": ["GET"] }
+                ]
+            },
+            {
+                "name": "streamserverWatchersbasic",
+                "description": "Stream Server Watchers Basic (without playlist Download)",
+                "authorizations": [
+                    { "endpoint": "/play/*", "methods": ["GET"] }
+                ]
+            },
+            {
+                "name": "playlistdownloader",
+                "description": "Playlist Downloader",
+                "authorizations": [
+                    { "endpoint": "/streamserver/playlist.m3u", "methods": ["GET"] }
+                ]
+            },
+            {
+                "name": "streamserverWatchersfull",
+                "description": "Stream Server Watchers Full (with playlist Download)",
+                "authorizations": [
+                    { "endpoint": "/play/*", "methods": ["GET"] },
+                    { "endpoint": "/streamserver/playlist.m3u", "methods": ["GET"] }
+                ]
+            },
+            {
+                "name": "administrator",
+                "description": "Administrator",
+                "authorizations": [
+                    { "endpoint": "*", "methods": ["GET", "POST", "PUT", "DELETE", "PATCH"] }
+                ]
+            }
+        ]
+
+        const fswriteauthroles = require("fs");
+        try {
+            var authrolesstr = JSON.stringify(authroles);
+
+            fswriteauthroles.writeFileSync("./streamproxy.authroles.json", authrolesstr);
+        } catch (err) {
+            console.log("err: " + err.message);
+        }
+
+    }
+
+}
 
 /* end of program */
