@@ -1020,12 +1020,12 @@ app.put('/api/streamserver', (req, res) => {
     }
 });
 
-app.delete('/api/streamserver', (req, res) => {
+app.delete('/api/streamserver/:streamname', (req, res) => {
     var auth = basicAuth(req, res);
     if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
-    var mystreamserver = { streamname: req.headers.streamname };
+    var mystreamserver = { streamname: req.params.streamname };
     var mystreamserverindex = arrstreamserverlist.findIndex(value => value.streamname === mystreamserver.streamname);
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
@@ -1187,13 +1187,13 @@ app.put('/api/users', (req, res) => {
     }
 })
 
-app.delete('/api/users', (req, res) => {
+app.delete('/api/users/:username', (req, res) => {
     var auth = basicAuth(req, res);
     if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     //var deleteuser = req.body;
-    var deleteuser = { username: req.headers.username }
+    var deleteuser = { username: req.params.username }
     var userIndex = users.findIndex(user => user.username == deleteuser.username);
     if (userIndex == -1) {
         res.statusText = "user " + deleteuser.username + "doesn exists";
@@ -1420,6 +1420,9 @@ app.get('/teste', (req, res) => {
     //req.pipe(tunnelteste);
 })
 
+app.post('/teste', (req, res) => {
+    console.log(req.body);
+})
 
 
 app.post('/api/killProcess', (req, res) => {
@@ -1669,7 +1672,7 @@ app.get('/status', (req, res) => {
             <body onload="startTimer()">
             
             <div id="status"></div>
-            <div id="snackbar">Some text some message..</div>
+            <div id="snackbar"></div>
             `
 
     res.send(data);
@@ -1782,12 +1785,11 @@ app.get('/streamserver/list', (req, res) => {
             var statusData = undefined;
             if(confirm('Are you sure you want to delete the stream server '+streamname+'?')){
                 try{
-                    ProcessHTML = fetch('/api/streamserver', {
+                    ProcessHTML = fetch('/api/streamserver/'+streamname, {
                     headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
-                    'Authorization': authorization,
-                    'streamname': streamname
+                    'Authorization': authorization
                      },
                       method: 'DELETE'
                      }).then(response =>{
@@ -2020,7 +2022,7 @@ app.get('/streamserver/list', (req, res) => {
     <button onclick="addStreamServer()" class="listbutton listbutton-blue" id="addStreamServer"><i class="fa fa-plus"></i> Add Stream Server</button> 
     <button onclick="downloadPlaylist()" class="listbutton listbutton-blue" id="downloadPlaylist"><i class="fa fa-list"></i> Download Playlist</button>
     <div id="status"></div>
-    <div id="snackbar">Some text some message..</div>`
+    <div id="snackbar"></div>`
     res.send(data);
 });
 
@@ -2053,11 +2055,11 @@ app.get('/user/list', (req, res) => {
             var statusData = undefined;
             if(confirm('Are you sure you want to delete the user '+user+'?')){
                 try{
-                    ProcessHTML = fetch('/api/users', {
+                    ProcessHTML = fetch('/api/users/'+user, {
                     headers: { 
                         'Accept': 'application/json',
-                        'username': user, 
                         `
+
     if (req.headers.authorization != undefined) {
         data += `'Content-Type': 'application/json',
                         'Authorization': '${req.headers.authorization}' 
@@ -2210,7 +2212,7 @@ function startTimer() {
     <body onload="startTimer()">
     <button onclick="addUser()"  class="listbutton listbutton-blue" id="addStreamServer"><i class="fa fa-plus"></i> Add User</button>  
     <div id="status"></div>
-    <div id="snackbar">Some text some message..</div>`
+    <div id="snackbar"></div>`
     res.send(data);
 })
 
@@ -2789,7 +2791,7 @@ app.get('/changepassword', (req, res) => {
      </center>
    </div>
   
-   <div id="snackbar">Some text some message..</div>
+   <div id="snackbar"></div>
      </div>                
                          </body>
                          </html>`;
@@ -4692,7 +4694,7 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
      </center>
    </div>
    </div>
-   <div id="snackbar">Some text some message..</div>
+   <div id="snackbar"></div>
      </div>  `
     html += `               
                          </body>
@@ -5019,7 +5021,7 @@ function mountUserAdminPage(req, res, method = "POST", actualdata) {
      </center>
    </div>
    </div>
-   <div id="snackbar">Some text some message..</div>
+   <div id="snackbar"></div>
      </div>  `
     html += `               
                          </body>
