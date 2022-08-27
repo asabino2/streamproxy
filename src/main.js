@@ -18,6 +18,9 @@ var arrstreamserverlist = [];
 
 const crypto = require('crypto');
 const createHash = crypto.createHash;
+const datadirectory = process.env.STREAMPROXY_DATA_DIR || './';
+
+
 
 /*
 var authroles = [{
@@ -91,6 +94,17 @@ process.on('exit', function() {
     process.exit();
 });
 */
+
+// prevent server shutdown on error
+process.on('uncaughtException', (err, origin) => {
+    log(
+
+        process.stderr.fd,
+        `Caught exception: ${err}\n` +
+        `Exception origin: ${origin}`
+    );
+});
+
 
 // Initialization of variables
 const app = express();
@@ -871,6 +885,144 @@ app.get('/play/:streamname', (req, res) => {
     })
 });
 
+app.get('/youtubetopodcast/:channelid', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+
+
+
+    const b64auth = (req.headers.authorization || '').split(' ')[1] || ''
+    const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
+
+    const httpsChannelData = require("https");
+    const httpslistData = require("https");
+    var htmldata = "";
+    var youtubeapikey = config.youtubeapikey || process.env.YOUTUBE_API_KEY || req.query.apikey;
+    var channelid = req.params.channelid;
+    var authenticationpart = "";
+
+    //var request = require('sync-request');
+    var channeldataraw = "";
+    //var channellistitemsraw = request('GET', `https://www.googleapis.com/youtube/v3/search?key=${youtubeapikey}&channelId=${channelid}&part=snippet,id&order=date&maxResults=20`)
+    var channellistitemsraw = ""
+    var channeldata = undefined;
+    var channellistitems = undefined;
+
+    if (os.platform == 'win32') {
+        res.statusMessage = "this endpoint is not compatible with windows, use linux instead"
+        res.status(400).send("this endpoint is not compatible with windows, use linux instead");
+        return false;
+    }
+
+    if (req.headers.authorization != undefined) {
+        authenticationpart = login + ":" + password + "@";
+    }
+
+
+    httpsChannelData.get(`https://www.googleapis.com/youtube/v3/channels?part=snippet&fields=items%2Fsnippet&id=${channelid}&key=${youtubeapikey}`, (resp) => {
+        let data = '';
+
+        // A chunk of data has been received.
+        resp.on('data', (chunk) => {
+            data += chunk;
+
+        });
+
+        // The whole response has been received. Print out the result.
+        resp.on('end', () => {
+            channeldata = JSON.parse(data);
+            if (channeldata.error != undefined) {
+                res.status(400).send("api youtube call error: " + channeldata.error.message);
+                return false;
+            }
+            httpslistData.get(`https://www.googleapis.com/youtube/v3/search?key=${youtubeapikey}&channelId=${channelid}&part=snippet,id&order=date&maxResults=20`, (resp) => {
+                let data2 = '';
+                // A chunk of data has been received.
+                resp.on('data', (chunk) => {
+                    data2 += chunk;
+
+                });
+
+                // The whole response has been received. Print out the result.
+                resp.on('end', () => {
+                    channellistitems = JSON.parse(data2);
+                    if (channellistitems.error != undefined) {
+                        res.status(400).send("api youtube call error: " + channellistitems.error.message);
+                        return false;
+                    }
+                    channellistitems.items = channellistitems.items.filter(value => value.snippet.liveBroadcastContent === 'none');
+
+                    res.setHeader('Content-Type', 'text/xml')
+                    htmldata += `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+<channel>
+<title>${channeldata.items[0].snippet.title}</title> <link>https://www.apple.com/itunes/podcasts/</link>
+<itunes:author>Streamproxy</itunes:author>
+<description>${channeldata.items[0].snippet.description}
+</description>
+<itunes:type>serial</itunes:type>
+<itunes:owner> <itunes:name>${channeldata.items[0].snippet.customUrl}</itunes:name>
+</itunes:owner>
+<itunes:image
+href="${channeldata.items[0].snippet.thumbnails.default.url}"
+/>
+
+<itunes:explicit>false</itunes:explicit>
+`
+
+
+                    channellistitems.items.forEach(item => {
+                        htmldata += `<item>
+       <itunes:title>${item.snippet.title}</itunes:title>
+<description>
+<content:encoded>
+<![CDATA[${item.snippet.description}]]>
+</content:encoded>
+</description>
+<enclosure
+
+type="audio/mpeg"
+url="http://${authenticationpart}${req.hostname}:${getPortCalled(req)}/audiostream/play?url=https://www.youtube.com/watch?v=${item.id.videoId}" />
+
+<pubDate>${new Date(item.snippet.publishedAt).toUTCString()}</pubDate>
+<itunes:image href="${item.snippet.thumbnails.default.url}"/>
+<itunes:explicit>false</itunes:explicit>
+</item>`
+                    })
+
+                    htmldata += `</channel>
+ </rss>`
+
+                    res.send(htmldata);
+                });
+
+            }).on("error", (err) => {
+                log("Error: " + err.message);
+                res.status(400).send("api youtube call error: " + err.message);
+                return false;
+            });
+
+        });
+
+    }).on("error", (err) => {
+        log("Error: " + err.message);
+        res.status(400).send("api youtube call error: " + err.message);
+        return false;
+    });
+
+
+
+
+})
+
+app.get('/test', (req, res) => {
+    //res.send(new Date('2022-08-19T20:30:00Z').toUTCString())
+    var envvar = req.query.var;
+    res.send(envvar + "=" + process.env[envvar]);
+})
+
 app.get('/api/streamserver/status', (req, res) => {
     var auth = basicAuth(req, res);
     if (auth.authenticated == false || auth.authorized != true) {
@@ -982,41 +1134,45 @@ app.put('/api/streamserver', (req, res) => {
         return false;
     }
     var mystreamserver = req.body;
-    log(`streamserver ${mystreamserver.streamname} change requested from ${req.ip}, json data: ${JSON.stringify(mystreamserver)}`)
-    var mystreamserverindex = arrstreamserverlist.findIndex(value => value.streamname === mystreamserver.streamname);
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-    res.header('Access-Control-Allow-Credentials', true);
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH');
-    if (mystreamserver.streammethod != "/audiostream/play") {
-        mystreamserver.type = "tv";
-    } else {
-        mystreamserver.type = "radio";
-    }
-
-    if (mystreamserverindex >= 0) {
-        /* save the existent fields */
-        for (var key in mystreamserver) {
-            if (mystreamserver[key] != undefined) {
-                arrstreamserverlist[mystreamserverindex][key] = mystreamserver[key];
-                log(`field ${key} changed to ${mystreamserver[key]}`)
-            }
-        }
-        //arrstreamserverlist[mystreamserverindex] = mystreamserver
-        log("Streamserver " + mystreamserver.streamname + " has changed")
-        saveStreamServers();
-        stopStreamServer(mystreamserver.streamname);
-        //startStreamServer(mystreamserver.streamname);
-        if (getStreamServerListSingle(mystreamserver.streamname).status == "running") {
-            setTimeout(startStreamServer, 5000, mystreamserver.streamname, req);
+    try {
+        log(`streamserver ${mystreamserver.streamname} change requested from ${req.ip}, json data: ${JSON.stringify(mystreamserver)}`)
+        var mystreamserverindex = arrstreamserverlist.findIndex(value => value.streamname === mystreamserver.streamname);
+        res.header('Access-Control-Allow-Origin', '*');
+        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+        res.header('Access-Control-Allow-Credentials', true);
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH');
+        if (mystreamserver.streammethod != "/audiostream/play") {
+            mystreamserver.type = "tv";
         } else {
-            startStreamServer(mystreamserver.streamname, req);
+            mystreamserver.type = "radio";
         }
-        res.json({ streamchanged: true, message: "Streamserver " + mystreamserver.streamname + " has changed" });
-    } else {
-        log("error on trying to change: Streamserver " + mystreamserver.streamname + " not exists")
-        res.statusMessage = "Streamserver " + mystreamserver.streamname + " not exists";
-        res.status(500).json({ streamchanged: false, message: "Streamserver " + mystreamserver.streamname + " not exists" });
+
+        if (mystreamserverindex >= 0) {
+            /* save the existent fields */
+            for (var key in mystreamserver) {
+                if (mystreamserver[key] != undefined) {
+                    arrstreamserverlist[mystreamserverindex][key] = mystreamserver[key];
+                    log(`field ${key} changed to ${mystreamserver[key]}`)
+                }
+            }
+            //arrstreamserverlist[mystreamserverindex] = mystreamserver
+            log("Streamserver " + mystreamserver.streamname + " has changed")
+            saveStreamServers();
+            stopStreamServer(mystreamserver.streamname);
+            //startStreamServer(mystreamserver.streamname);
+            if (getStreamServerListSingle(mystreamserver.streamname).status == "running") {
+                setTimeout(startStreamServer, 5000, mystreamserver.streamname, req);
+            } else {
+                startStreamServer(mystreamserver.streamname, req);
+            }
+            res.json({ streamchanged: true, message: "Streamserver " + mystreamserver.streamname + " has changed" });
+        } else {
+            log("error on trying to change: Streamserver " + mystreamserver.streamname + " not exists")
+            res.statusMessage = "Streamserver " + mystreamserver.streamname + " not exists";
+            res.status(500).json({ streamchanged: false, message: "Streamserver " + mystreamserver.streamname + " not exists" });
+        }
+    } catch (e) {
+        res.status(500).json({ streamchanged: false, message: "internal error: " + e.message })
     }
 });
 
@@ -1268,8 +1424,11 @@ app.get('/info', (req, res) => {
 });
 
 app.get('/clientinfo', (req, res) => {
+    const b64auth = (req.headers.authorization || '').split(' ')[1] || ''
+    const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
+    var clientinfo = { host: req.hostname, port: getPortCalled(req), path: req.path, authdata: { username: login, password: password }, clientdata: req.useragent };
     res.setHeader('Content-Type', 'application/json');
-    res.json(req.useragent);
+    res.json(clientinfo);
 });
 
 app.get('/api/log', (req, res) => {
@@ -2819,7 +2978,7 @@ function loadconfig() {
     config = {};
     try {
         const fs = require("fs");
-        const jsonString = fs.readFileSync("./streamproxy.config.json");
+        const jsonString = fs.readFileSync(datadirectory + "streamproxy.config.json");
         config = JSON.parse(jsonString);
 
     } catch (err) {
@@ -2833,7 +2992,7 @@ function loadconfig() {
         try {
             var configstr = JSON.stringify(config);
 
-            fswrite.writeFileSync("./streamproxy.config.json", configstr);
+            fswrite.writeFileSync(datadirectory + "streamproxy.config.json", configstr);
         } catch (err) {
 
         }
@@ -2889,8 +3048,11 @@ function loadconfig() {
         }
     }
 
-
-
+    /*    
+        if (config.youtubeapikey == undefined) {
+            config.youtubeapikey = process.env.YOUTUBE_API_KEY;
+        }
+    */
 
 }
 
@@ -3858,89 +4020,90 @@ function startStreamServer(streamname, req) {
     var mystreamserverIndex = arrstreamserverlistnew.findIndex(val => val.streamname === streamname);
     var response = {};
     var userpass = "system:" + systempassword;
-    userpass = Buffer.from(userpass).toString('base64');
+    try {
+        userpass = Buffer.from(userpass).toString('base64');
 
-    if (mystreamserverIndex < 0) {
-        response.status = 404;
-        response.statusMessage = "streamserver " + streamname + " not found";
-        response.json = { status: "error", message: "streamserver " + streamname + " not found" };
-        log("error on trying to start stream server " + streamname + "streamserver " + streamname + " not found")
-        return response;
-    }
+        if (mystreamserverIndex < 0) {
+            response.status = 404;
+            response.statusMessage = "streamserver " + streamname + " not found";
+            response.json = { status: "error", message: "streamserver " + streamname + " not found" };
+            log("error on trying to start stream server " + streamname + "streamserver " + streamname + " not found")
+            return response;
+        }
 
-    mystreamserver = arrstreamserverlistnew[mystreamserverIndex]
+        mystreamserver = arrstreamserverlistnew[mystreamserverIndex]
 
-    if (mystreamserver.status == "running") {
-        response.status = 500;
-        response.statusMessage = "streamserver " + streamname + " already started";
-        response.json = { status: "error", message: "streamserver " + streamname + " already started" };
-        log("error on trying to start stream server " + streamname + "streamserver " + streamname + " already started")
-        return response;
-    }
+        if (mystreamserver.status == "running") {
+            response.status = 500;
+            response.statusMessage = "streamserver " + streamname + " already started";
+            response.json = { status: "error", message: "streamserver " + streamname + " already started" };
+            log("error on trying to start stream server " + streamname + "streamserver " + streamname + " already started")
+            return response;
+        }
 
-    if (streamdescription == "") {
-        streamdescription = streamname;
-    }
+        if (streamdescription == "") {
+            streamdescription = streamname;
+        }
 
-    var streammethod = mystreamserver.streammethod;
-    var streamdescription = mystreamserver.streamdescription;
-    var url = mystreamserver.url;
-    var service_provider = mystreamserver.service_provider;
-    var videoformat = mystreamserver.videoformat;
-    var videocodec = mystreamserver.videocodec;
-    var audiocodec = mystreamserver.audiocodec;
-    var framesize = mystreamserver.framesize;
-    var framerate = mystreamserver.framerate;
-    var channelnumber = mystreamserver.channelnumber;
-    var title = mystreamserver.title;
-    var hasError = false;
-    var response = { status: 200, json: {} };
-
-
+        var streammethod = mystreamserver.streammethod;
+        var streamdescription = mystreamserver.streamdescription;
+        var url = mystreamserver.url;
+        var service_provider = mystreamserver.service_provider;
+        var videoformat = mystreamserver.videoformat;
+        var videocodec = mystreamserver.videocodec;
+        var audiocodec = mystreamserver.audiocodec;
+        var framesize = mystreamserver.framesize;
+        var framerate = mystreamserver.framerate;
+        var channelnumber = mystreamserver.channelnumber;
+        var title = mystreamserver.title;
+        var hasError = false;
+        var response = { status: 200, json: {} };
 
 
-    var url = mystreamserver.url;
-    var urltocall = "";
 
-    if (streamname == "" || streamname == undefined) {
-        //alert('fill stream name field');
 
-        hasError = true;
-    } else {
+        var url = mystreamserver.url;
+        var urltocall = "";
 
-        streamname = "&streamserver=" + streamname
-    }
+        if (streamname == "" || streamname == undefined) {
+            //alert('fill stream name field');
 
-    if (videoformat == "" || videoformat == undefined) {
-        videoformat = "";
-    } else {
-        videoformat = "&videoformat=" + videoformat;
-    }
-    if (framesize == "" || framesize == undefined) {
-        framesize = "";
-    } else {
-        framesize = "&framesize=" + framesize;
-    }
+            hasError = true;
+        } else {
 
-    if (framerate == "" || framerate == undefined) {
-        framerate = "";
-    } else {
-        framerate = "&framerate=" + framerate;
-    }
+            streamname = "&streamserver=" + streamname
+        }
 
-    if (streamdescription == "" || streamdescription == undefined) {
-        streamdescription = "";
-    } else {
-        streamdescription = "&streamdescription=" + encodeURI(streamdescription);
-    }
+        if (videoformat == "" || videoformat == undefined) {
+            videoformat = "";
+        } else {
+            videoformat = "&videoformat=" + videoformat;
+        }
+        if (framesize == "" || framesize == undefined) {
+            framesize = "";
+        } else {
+            framesize = "&framesize=" + framesize;
+        }
 
-    if (service_provider == "" || service_provider == undefined) {
-        service_provider = "";
-    } else {
-        service_provider = "&serviceprovider=" + service_provider;
-    }
+        if (framerate == "" || framerate == undefined) {
+            framerate = "";
+        } else {
+            framerate = "&framerate=" + framerate;
+        }
 
-    /*
+        if (streamdescription == "" || streamdescription == undefined) {
+            streamdescription = "";
+        } else {
+            streamdescription = "&streamdescription=" + encodeURI(streamdescription);
+        }
+
+        if (service_provider == "" || service_provider == undefined) {
+            service_provider = "";
+        } else {
+            service_provider = "&serviceprovider=" + service_provider;
+        }
+
+        /*
     if (channelnumber == "" || channelnumber == undefined) {
         channelnumber = "";
 
@@ -3948,107 +4111,111 @@ function startStreamServer(streamname, req) {
         channelnumber = "&chnumber=" + channelnumber;
     }
 */
-    if (videocodec == "" || videocodec == undefined) {
-        videocodec = "";
+        if (videocodec == "" || videocodec == undefined) {
+            videocodec = "";
 
-    } else {
-        videocodec = "&videocodec=" + videocodec;
-    }
-
-    if (audiocodec == "" || audiocodec == undefined) {
-        audiocodec = "";
-    } else {
-        audiocodec = "&audiocodec=" + audiocodec;
-    }
-
-    if (title == "" || title == undefined) {
-        title = "";
-    } else {
-        title = "&title=" + title;
-    }
-
-    if (url == "" || url == undefined) {
-        //alert('fill stream name field');
-
-        hasError = true;
-    }
-
-    if (hasError == true) {
-        response.status = 500;
-        response.json = { status: "error", message: "server error on start streamserver " + streamname };
-        return response;
-    }
-
-
-    if (streammethod != "/videostream/ffmpeg" && streammethod != "/videostream/play") {
-        videoformat = "";
-        service_provider = "";
-
-        videocodec = "";
-        audiocodec = "";
-    }
-
-    if (streammethod != "/videostream/ffmpeg" && streammethod != "/videostream/play" && streammethod != "/videostream/streamlink") {
-        channelnumber = "";
-    }
-    if (streammethod != "/audiostream/play") {
-        title = "";
-    }
-
-
-
-    urltocall = "http://localhost:" + config.port + streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title;
-
-    const http = require("http");
-    var options = {};
-    /*
-        if (req.headers.authorization != undefined) {
-            options = {
-                port: config.port,
-                path: streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title,
-                headers: { authorization: req.headers.authorization }
-            }
         } else {
-            options = {
-                port: config.port,
-                path: streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title
-
-            }
+            videocodec = "&videocodec=" + videocodec;
         }
-    */
 
-    options = {
-        port: config.port,
-        path: streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title,
-        headers: { systemAuthorization: userpass }
+        if (audiocodec == "" || audiocodec == undefined) {
+            audiocodec = "";
+        } else {
+            audiocodec = "&audiocodec=" + audiocodec;
+        }
+
+        if (title == "" || title == undefined) {
+            title = "";
+        } else {
+            title = "&title=" + title;
+        }
+
+        if (url == "" || url == undefined) {
+            //alert('fill stream name field');
+
+            hasError = true;
+        }
+
+        if (hasError == true) {
+            response.status = 500;
+            response.json = { status: "error", message: "server error on start streamserver " + streamname };
+            return response;
+        }
+
+
+        if (streammethod != "/videostream/ffmpeg" && streammethod != "/videostream/play") {
+            videoformat = "";
+            service_provider = "";
+
+            videocodec = "";
+            audiocodec = "";
+        }
+
+        if (streammethod != "/videostream/ffmpeg" && streammethod != "/videostream/play" && streammethod != "/videostream/streamlink") {
+            channelnumber = "";
+        }
+        if (streammethod != "/audiostream/play") {
+            title = "";
+        }
+
+
+
+        urltocall = "http://localhost:" + config.port + streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title;
+
+        const http = require("http");
+        var options = {};
+        /*
+            if (req.headers.authorization != undefined) {
+                options = {
+                    port: config.port,
+                    path: streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title,
+                    headers: { authorization: req.headers.authorization }
+                }
+            } else {
+                options = {
+                    port: config.port,
+                    path: streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title
+
+                }
+            }
+        */
+
+        options = {
+            port: config.port,
+            path: streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title,
+            headers: { systemAuthorization: userpass }
+        }
+
+        http.get(options, (resp) => {
+            let data = '';
+
+            // A chunk of data has been received.
+            resp.on('data', (chunk) => {
+                data += chunk;
+
+            });
+
+            // The whole response has been received. Print out the result.
+            resp.on('end', () => {
+
+
+
+            });
+
+        }).on("error", (err) => {
+            log("Error on call start streanserver " + streamname + ": " + err.message);
+
+
+        });
+        log("stream server " + streamname + " has started");
+        response.status = 200;
+        response.json = { status: "ok", message: "process executed asynchronous" };
+        return response;
+    } catch (e) {
+        log("Error on call start streanserver " + streamname + ": " + e.message);
+        console.log("internal error: " + e.message);
+        response.json = { status: "internalerror", message: e.message };
     }
-
-    http.get(options, (resp) => {
-        let data = '';
-
-        // A chunk of data has been received.
-        resp.on('data', (chunk) => {
-            data += chunk;
-
-        });
-
-        // The whole response has been received. Print out the result.
-        resp.on('end', () => {
-
-
-
-        });
-
-    }).on("error", (err) => {
-        log("Error on call start streanserver " + streamname + ": " + err.message);
-
-
-    });
-    log("stream server " + streamname + " has started");
-    response.status = 200;
-    response.json = { status: "ok", message: "process executed asynchronous" };
-    return response;
-
 
 }
 
@@ -4186,7 +4353,7 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
         html += `<title>Edit stream Server ${actualdata.streamname}</title>
         `
     }
-    `
+    html += `
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/toast.css">`;
 
@@ -5050,7 +5217,7 @@ function loadStreamServers() {
 
     try {
         const fs = require("fs");
-        const jsonString = fs.readFileSync("./streamproxy.streamservers.json");
+        const jsonString = fs.readFileSync(datadirectory + "streamproxy.streamservers.json");
         arrstreamserverlist = JSON.parse(jsonString);
         //startAllStreamServers();
     } catch (err) {
@@ -5067,7 +5234,7 @@ function saveStreamServers() {
     try {
         var arrstreamserverliststr = JSON.stringify(arrstreamserverlist);
 
-        fswrite.writeFileSync("./streamproxy.streamservers.json", arrstreamserverliststr);
+        fswrite.writeFileSync(datadirectory + "streamproxy.streamservers.json", arrstreamserverliststr);
     } catch (err) {
 
     }
@@ -5181,7 +5348,7 @@ function loadUsers() {
     var isMigrated = false;
     try {
         const fs = require("fs");
-        const jsonString = fs.readFileSync("./streamproxy.users.json");
+        const jsonString = fs.readFileSync(datadirectory + "streamproxy.users.json");
         users = JSON.parse(jsonString);
 
     } catch (err) {
@@ -5209,7 +5376,7 @@ function loadUsers() {
             try {
                 var configstr = JSON.stringify(config);
 
-                fswrite.writeFileSync("./streamproxy.config.json", configstr);
+                fswrite.writeFileSync(datadirectory + "streamproxy.config.json", configstr);
             } catch (err) {
 
             }
@@ -5219,7 +5386,7 @@ function loadUsers() {
         try {
             var usersstr = JSON.stringify(users);
 
-            fswriteuser.writeFileSync("./streamproxy.users.json", usersstr);
+            fswriteuser.writeFileSync(datadirectory + "streamproxy.users.json", usersstr);
         } catch (err) {
 
         }
@@ -5235,7 +5402,7 @@ function saveUsers() {
     try {
         var usersstr = JSON.stringify(users);
 
-        fswriteuser.writeFileSync("./streamproxy.users.json", usersstr);
+        fswriteuser.writeFileSync(datadirectory + "streamproxy.users.json", usersstr);
     } catch (err) {
 
     }
@@ -5245,7 +5412,7 @@ function loadAuthRoles() {
 
     try {
         const fs = require("fs");
-        const jsonString = fs.readFileSync("./streamproxy.authroles.json");
+        const jsonString = fs.readFileSync(datadirectory + "streamproxy.authroles.json");
         authroles = JSON.parse(jsonString);
     } catch (err) {
 
@@ -5263,6 +5430,13 @@ function loadAuthRoles() {
                 "authorizations": [
                     { "endpoint": "/videostream/*", "methods": ["GET"] },
                     { "endpoint": "/audiostream/play", "methods": ["GET"] }
+                ]
+            },
+            {
+                "name": "podcastsubscriber",
+                "description": "podcast subscriber",
+                "authorizations": [
+                    { "endpoint": "/youtubetopodcast/*", "methods": ["GET"] }
                 ]
             },
             {
@@ -5300,7 +5474,7 @@ function loadAuthRoles() {
         try {
             var authrolesstr = JSON.stringify(authroles);
 
-            fswriteauthroles.writeFileSync("./streamproxy.authroles.json", authrolesstr);
+            fswriteauthroles.writeFileSync(datadirectory + "streamproxy.authroles.json", authrolesstr);
         } catch (err) {
             console.log("err: " + err.message);
         }
@@ -5308,5 +5482,8 @@ function loadAuthRoles() {
     }
 
 }
+
+
+
 
 /* end of program */
