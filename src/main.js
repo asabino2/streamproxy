@@ -98,8 +98,6 @@ process.on('exit', function() {
 // prevent server shutdown on error
 process.on('uncaughtException', (err, origin) => {
     log(
-
-        process.stderr.fd,
         `Caught exception: ${err}\n` +
         `Exception origin: ${origin}`
     );
@@ -1552,6 +1550,7 @@ app.get('/log', (req, res) => {
     </script>
   </header>
   <body onload="startTimer()">
+  ${CreateMenu(auth)}
   <button onclick="clearlog()">Clear Log</button>
     <textarea
       readonly
@@ -1614,7 +1613,8 @@ app.get('/login', (req, res) => {
     if (basicAuth(req, res).authenticated == false) { //if authentication is required and fail, return 401
         return false;
     }
-    res.send("User authenticate");
+    //res.send("User authenticate");
+    res.redirect('/');
 })
 
 
@@ -1622,8 +1622,9 @@ app.get('/login', (req, res) => {
 app.get('/logout', (req, res) => {
 
     res.set('WWW-Authenticate', 'Basic realm="401"') // change this
-    res.status(401).send('Logout ok.') // custom message
-
+    //res.status(401).send('Logout ok.') // custom message
+    //res.status(401).redirect('/');
+    res.status(401).send('logout ok <script language="javascript">window.location = "/"</script>');
 
 
 
@@ -1829,7 +1830,7 @@ app.get('/status', (req, res) => {
             </script>   
             </head>
             <body onload="startTimer()">
-            
+            ${CreateMenu(auth)}
             <div id="status"></div>
             <div id="snackbar"></div>
             `
@@ -2176,6 +2177,7 @@ app.get('/streamserver/list', (req, res) => {
     </script>   
     </head>
     <body onload="startTimer()">
+    ${CreateMenu(auth)}
     <button onclick="startStreamServer('*')"  class="listbutton listbutton-green" id="startAll"><i class="fa fa-play space-right"></i> Start All</button>  
     <button onclick="stopStreamServer('*')" class="listbutton listbutton-red" id="stopAll"><i class="fa fa-stop space-right"></i> Stop All</button>    
     <button onclick="addStreamServer()" class="listbutton listbutton-blue" id="addStreamServer"><i class="fa fa-plus"></i> Add Stream Server</button> 
@@ -2369,6 +2371,7 @@ function startTimer() {
     </script>   
     </head>
     <body onload="startTimer()">
+    ${CreateMenu(auth)}
     <button onclick="addUser()"  class="listbutton listbutton-blue" id="addStreamServer"><i class="fa fa-plus"></i> Add User</button>  
     <div id="status"></div>
     <div id="snackbar"></div>`
@@ -2444,18 +2447,18 @@ app.get('/status/*', (req, res) => {
 })
 
 
-app.get('/', (req, res) => {
+app.get('/about', (req, res) => {
     var auth = basicAuth(req, res);
     if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
 
     res.set({ 'Server': 'streamproxy' });
-    res.redirect("/about");
+    res.redirect("/");
 });
 
 // help page, captured from github pages
-app.get('/about', async function(req, res) {
+app.get('/', async function(req, res) {
     var auth = basicAuth(req, res);
     if (auth.authenticated == false || auth.authorized != true) {
         return false;
@@ -2470,11 +2473,20 @@ app.get('/about', async function(req, res) {
     const portreplacer = new RegExp(portsearch, 'g');
     const localhostreplacer = new RegExp(localhostsearch, 'g');
     res.set({ 'Server': 'streamproxy' });
+    res.set({ 'Access-Control-Allow-Origin': '*' });
     appsetheader(res);
     https.get('https://raw.githubusercontent.com/asabino2/streamproxy/master/README.md', (resp) => {
         let data = '';
-
-        // A chunk of data has been received.
+        let menuStyle = CreateMenuStyle();
+        let menu = CreateMenu(auth);
+        data += `<header>
+                <style>
+                 ${menuStyle}
+                </style>
+                </header>
+                <body>
+                ${menu}`
+            // A chunk of data has been received.
         resp.on('data', (chunk) => {
             data += chunk;
 
@@ -2482,7 +2494,7 @@ app.get('/about', async function(req, res) {
 
         // The whole response has been received. Print out the result.
         resp.on('end', () => {
-
+            data += `</body>`
             data = data.replace(serverreplacer, req.hostname);
             data = data.replace(portreplacer, port);
             data = data.replace(localhostreplacer, req.hostname + ":" + port);
@@ -2517,6 +2529,7 @@ app.get('/docs/api', (req, res) => {
 
 app.get('/styles.css', (req, res) => {
     var data = "";
+    var menuStyle = CreateMenuStyle();
     data = `
     
     a {
@@ -2675,7 +2688,10 @@ app.get('/styles.css', (req, res) => {
                 
                 background-color: gray;
               }
-        /* list button end */`;
+        /* list button end */
+        
+        ${menuStyle}
+          `;
     res.send(data);
 });
 
@@ -5483,7 +5499,58 @@ function loadAuthRoles() {
 
 }
 
+function CreateMenu(auth) {
+    var html = '';
+    //var auth = basicAuth(req, res);
+    html = '<nav class="navigator">'
+    html += '<ul class="menuclass">'
+
+    if (auth.authenticated == true && auth.user != 'anonymous') {
+        html += '<li class="menuoptions"><a href="/logout">Logout</a></li>'
+        html += '<li class="menuoptions"><a href="/streamserver/list">Stream Servers</a></li>'
+        html += '<li class="menuoptions"><a href="/user/list">Users</a></li>'
+        html += '<li class="menuoptions"><a href="/status">Status</a></li>'
+        html += '<li class="menuoptions"><a href="/log">Logs</a></li>'
+        html += '<li class="menuoptions"><a href="/docs/api/">API Documentation</a></li>'
+    } else {
+        html += '<li class="menuoptions"><a href="/login">Login</a></li>'
+    }
+    html += '</ul>'
+    html += '</nav>'
+    return html;
+}
 
 
+function CreateMenuStyle() {
+    var html = '';
+    html = `/* menu style */
+    .navigator {
+     background-color: #333;
+      }
+      
+      .menuclass {
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+      
+      .menuoptions {
+        float: left;
+      }
+      
+      .menuoptions a {
+        display: block;
+        color: white;
+        text-align: center;
+        padding: 14px 16px;
+        text-decoration: none;
+      }
+      
+      .menuoptions a:hover {
+        background-color: #111;
+      }`
+    return html;
+}
 
 /* end of program */
