@@ -6,6 +6,29 @@
 const { spawn } = require('child_process');
 const express = require('express');
 const os = require('os');
+
+const yargs = require('yargs');
+
+const argv = yargs
+    .usage('Usage: $0 [options]')  
+.options({
+    'port': {
+      alias: 'p',
+      demandOption: false,
+      describe: 'port number',
+      type: 'integer',
+    },
+    'datadirectory': {
+      alias: 'd',
+      demandOption: false,
+      describe: 'data files path (streamproxy.authroles.json, streamproxy.users.json, streamproxy.streamservers.json)',
+      type: 'string',
+    },
+  })
+  .help()
+  .alias('help', 'h')
+  .argv;
+//console.log("port: "+argv['port']);
 var useragent = require('express-useragent');
 var config = {};
 var info = { pid: 0, platform: "", arch: "", freemem: 0, totalmem: 0, ostype: "", versions: { ffmpeg: "", streamlink: "", os: "" } }
@@ -18,7 +41,7 @@ var arrstreamserverlist = [];
 
 const crypto = require('crypto');
 const createHash = crypto.createHash;
-const datadirectory = process.env.STREAMPROXY_DATA_DIR || './';
+const datadirectory = argv['datadirectory'] || process.env.STREAMPROXY_DATA_DIR || './';
 
 
 
@@ -879,6 +902,9 @@ app.get('/play/:streamname', (req, res) => {
 
     req.on('close', () => { // on connection close, kill PID of app
         removeStreamServerStatus(UUID);
+        if(getStreamServerConnectionCount(streamname) == 0 && config.streamserver.stopOnNoConnection == true){
+            stopStreamServer(streamname);
+        }
 
     })
 });
@@ -1019,6 +1045,7 @@ app.get('/test', (req, res) => {
     //res.send(new Date('2022-08-19T20:30:00Z').toUTCString())
     var envvar = req.query.var;
     res.send(envvar + "=" + process.env[envvar]);
+    //res.send(getYoutubeLiveVideos());
 })
 
 app.get('/api/streamserver/status', (req, res) => {
@@ -2974,6 +3001,29 @@ app.get('/changepassword', (req, res) => {
     res.send(html);
 })
 
+app.get("/.well-known/ai-plugin.json", function (req, res) {
+    var pluginjson = {
+  schema_version: "v1",
+  name_for_human: "StreamProxy ChatGPT Plugin",
+  name_for_model: "streamproxy_chatgpt_plugin",
+  description_for_human: "Plugin for managing streams in streamproxy",
+  description_for_model: "Plugin for managing streams in streamproxy",
+  auth: {
+    type: "none"
+  },
+  api: {
+    type: "openapi",
+    url: "https://stoplight.io/api/v1/projects/asabino/streamproxy/nodes/apidoc.yaml",
+    is_user_authenticated: false
+  },
+  logo_url: "PLUGIN_HOSTNAME/logo.png",
+  contact_email: "asabino2@gmail.com",
+  legal_info_url: "https://example.com/legal"
+}
+
+    res.send(pluginjson);
+})
+
 var server = app.listen(config.port);
 
 
@@ -2991,6 +3041,7 @@ var server = app.listen(config.port);
 
 // Load configuration
 function loadconfig() {
+    //console.log("port defined: " + argv['port']);
     config = {};
     try {
         const fs = require("fs");
@@ -3001,7 +3052,7 @@ function loadconfig() {
 
 
 
-        config = { port: 4211, logConsole: true, logWeb: false, showErrorInStream: false, streamlinkpath: "", ffmpegpath: "", ffmpeg: { codec: "mpeg2video", format: "mpegts", serviceprovider: "streamproxy" }, streamserver: { startOnInvoke: false, hideStoppedStreamServerInPlaylist: true } };
+        config = { port: argv['port'] || 4211, logConsole: true, logWeb: false, showErrorInStream: false, streamlinkpath: "", ffmpegpath: "", ffmpeg: { codec: "mpeg2video", format: "mpegts", serviceprovider: "streamproxy" }, streamserver: { startOnInvoke: false, hideStoppedStreamServerInPlaylist: true, stopOnNoConnection: false } };
 
 
         const fswrite = require("fs");
@@ -3013,6 +3064,11 @@ function loadconfig() {
 
         }
 
+    }
+
+    // if port defined in command line, overwrite config file
+    if (argv['port'] != undefined) {
+        config.port = argv['port'];
     }
 
     if (config.streamlinkpath == undefined) {
@@ -3061,6 +3117,10 @@ function loadconfig() {
 
         if (config.streamserver.hideStoppedStreamServerInPlaylist == undefined) {
             config.streamserver.hideStoppedStreamServerInPlaylist = true;
+        }
+
+        if (config.streamserver.stopOnNoConnection == undefined) {
+            config.streamserver.stopOnNoConnection = false;
         }
     }
 
@@ -4235,8 +4295,11 @@ function startStreamServer(streamname, req) {
 
 }
 
-
-
+function getStreamServerConnectionCount(streamname) {
+    var count = 0;
+    var streamserverstatusfilter = streamserverstatus.filter(value => value.streamname === streamname);
+    return streamserverstatusfilter.length;
+}
 function getStreamServersListData() {
     var arrstreamserverlistnew = [];
     var processIndex = 0;
@@ -4245,7 +4308,7 @@ function getStreamServersListData() {
     var datasize = 0;
     var catsize = "";
     arrstreamserverlist.forEach(data => {
-        var streamserverstatusfilter = streamserverstatus.filter(value => value.streamname === data.streamname);
+        //var streamserverstatusfilter = streamserverstatus.filter(value => value.streamname === data.streamname);
         streamserverSingle.users = 0
         processIndex = processes.findIndex(val => val.streamservername === data.streamname);
         streamserverSingle = data;
@@ -4271,7 +4334,8 @@ function getStreamServersListData() {
             streamserverSingle.PID = undefined;
             streamserverSingle.dataTransfered = "0 bytes"
         }
-        streamserverSingle.connections = streamserverstatusfilter.length;
+        //streamserverSingle.connections = streamserverstatusfilter.length;
+        streamserverSingle.connections = getStreamServerConnectionCount(data.streamname);
         arrstreamserverlistnew.push(streamserverSingle);
     })
     return arrstreamserverlistnew;
@@ -5552,5 +5616,8 @@ function CreateMenuStyle() {
       }`
     return html;
 }
+
+ 
+
 
 /* end of program */
