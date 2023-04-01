@@ -251,7 +251,8 @@ streamproxy</p>
  }, <s>&quot;token&quot;: &quot;yourtoken&quot;, (optional)
 </s>&quot;streamserver&quot;: { 
   &quot;startOnInvoke&quot;: false,
-  &quot;hideStoppedStreamServerInPlaylist&quot;: true
+  &quot;hideStoppedStreamServerInPlaylist&quot;: true,
+  &quot;stopOnNoConnection&quot;: true
 }
  &quot;basicAuthentication&quot;: { &quot;active&quot;: true, &quot;users&quot;: [{ &quot;username&quot;: &quot;teste&quot;, &quot;password&quot;: &quot;teste2&quot; }] } (optional, if exist, server will be require login in all endpoints)
 
@@ -270,6 +271,7 @@ streamproxy</p>
 	<li>serviceprovider: the service provider of transcoded ffmpeg&#39;s stream</li>
 	<li>startOnInvoke: if seted to true, if a streamserver is stopped, will be started when called, if false, will raise a HTTP 500 error</li>
 	<li>hideStoppedStreamServerInPlaylist: if seted to true, will hide the stopped streamservers in /streamserver/playlist.m3u, else will be show in playlist all the streamservers created, even the stoppeds</li>
+	<li>stopOnNoConnection: stop the streamserver if no more clients are connected
 	<li>Now, <s>in addition to using token</s>, you can create logins to allow access to all endpoints. The server will use Basic Authentication, so to use the videostream url in your IPTV app you should use: http://&lt;username&gt;:&lt;password&gt;@&lt;IP&gt;:&lt;port&gt;/videostream/streamlink?url=&lt;url address from the live stream &gt;<br />
 	The token is now obsolete and may be retired from future versions</li>
 </ul>
@@ -430,6 +432,16 @@ streamproxy</p>
 <p>&nbsp;</p>
 
 <p><strong>OBS: Now you can set the directory of streamproxy.config.json, streamproxy.authroles.json, streamproxy.users.json, streamproxy.streamservers.json using the&nbsp;environment variable&nbsp;STREAMPROXY_DATA_DIR&nbsp;</strong></p>
+
+<hr />
+ CLI Parameters: run streamproxy -h to see the cli parameters help
+
+<hr />
+ <h2>Streamproxy is already for ChatGPT Plugin (Alpha)</h2>
+ now you can use your streamproxy server as chatgpt plugin. 
+ unfortunately I can't perform tests, because I don't have chatgpt plus. <b><i>Use at your own risk</i></b>
+
+ For more information, see the chatgpt plugins documentation on openAI
 
 <hr />
 <p>there are a docker version of streamproxy at <a href="https://hub.docker.com/repository/docker/asabino2/streamproxy">https://hub.docker.com/repository/docker/asabino2/streamproxy</a></p>
