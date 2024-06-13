@@ -19,6 +19,8 @@
 
 <p>&nbsp;</p>
 
+<b><i>Important info: the default password of admin user is admin. After login with this user please change the password using url http://&lt;serverip&gt;:&lt;port&gt;/changepassword</i></b>
+
 <p>with it you can watch livestreams from youtube, twitch (and any other that can be accessed through the streamlink app) by other iptv apps, such as SSIPTV, tvheadend, ProgTV, etc..</p>
 
 <p>To start the server, run from the command prompt<br />
