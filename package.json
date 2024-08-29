@@ -1,6 +1,6 @@
 {
     "name": "streamproxy",
-    "version": "1.3.7",
+    "version": "1.3.8",
     "description": "Stream Proxy - A proxy for your streams",
     "keywords": [
         "streamproxy",
@@ -8,9 +8,9 @@
     ],
     "main": "src/main.js",
     "scripts": {
-        "compile-win": "pkg -t  node14-win src/main.js -o bin/win-x64/streamproxy.exe",
-        "compile-linux": "pkg -t node14-linux-x64 src/main.js -o bin/linux-x64/streamproxy",
-        "compile-NAS": "pkg -t node14-linux-arm64 src/main.js -o bin/linux-arm64/streamproxy-arm64"
+        "compile-win": "pkg -t  node18-win src/main.js -o bin/win-x64/streamproxy.exe",
+        "compile-linux": "pkg -t node18-linux-x64 src/main.js -o bin/linux-x64/streamproxy",
+        "compile-NAS": "pkg -t node18-linux-arm64 src/main.js -o bin/linux-arm64/streamproxy-arm64"
     },
     "author": "Alexander Sabino <asabino2@gmail.com>",
     "license": "GPL-3.0",
@@ -21,6 +21,7 @@
     "homepage": "https://github.com/asabino2/streamproxy",
     "dependencies": {
         "body-parser": "^1.20.0",
+        "deasync": "^0.1.28",
         "debug": "^4.1.1",
         "elliptic": "^6.5.4",
         "express": "^4.18.1",

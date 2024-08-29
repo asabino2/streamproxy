@@ -105,6 +105,7 @@ const bodyParser = require('body-parser');
 const { application, response } = require('express');
 
 loadconfig();
+//console.log(`port ${config.port} is occupied: ${portIsOccupied(config.port)}`);
 loadAuthRoles();
 loadUsers();
 loadStreamServers();
@@ -1291,6 +1292,25 @@ app.get('/api/checkstream', (req, res) => {
 
     res.json(checkstream(url));
 });
+
+app.get('/api/getsnapshot', (req, res) => {
+ 
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+
+    //appsetheader(res);
+    url = req.query.url;
+    url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
+    //resolution = req.query.resolution;
+    const resolution = req.query.resolution || "0x0";
+    const [reswidth, resheight] = resolution.split('x');
+    
+
+    res.json(getsnapshotfromStream(url, reswidth, resheight));
+})
+
 
 app.get('/api/status', (req, res) => {
     var auth = basicAuth(req, res);
@@ -2486,6 +2506,9 @@ app.get('/about', (req, res) => {
 
 // help page, captured from github pages
 app.get('/', async function(req, res) {
+    if(config.logheader == true){
+    log(JSON.stringify(req.headers));
+    }
     var auth = basicAuth(req, res);
     if (auth.authenticated == false || auth.authorized != true) {
         return false;
@@ -3052,7 +3075,7 @@ function loadconfig() {
 
 
 
-        config = { port: argv['port'] || 4211, logConsole: true, logWeb: false, showErrorInStream: false, streamlinkpath: "", ffmpegpath: "", ffmpeg: { codec: "mpeg2video", format: "mpegts", serviceprovider: "streamproxy" }, streamserver: { startOnInvoke: false, hideStoppedStreamServerInPlaylist: true, stopOnNoConnection: false } };
+        config = { port: argv['port'] || 4211, logheader: false, logConsole: true, logWeb: false, showErrorInStream: false, streamlinkpath: "", ffmpegpath: "", ffmpeg: { codec: "mpeg2video", format: "mpegts", serviceprovider: "streamproxy" }, streamserver: { startOnInvoke: false, hideStoppedStreamServerInPlaylist: true, stopOnNoConnection: false } };
 
 
         const fswrite = require("fs");
@@ -3065,7 +3088,7 @@ function loadconfig() {
         }
 
     }
-
+    //config.port = 9122;
     // if port defined in command line, overwrite config file
     if (argv['port'] != undefined) {
         config.port = argv['port'];
@@ -3079,7 +3102,9 @@ function loadconfig() {
         config.ffmpegpath = "";
     }
 
-
+    if(config.logheader == undefined){
+        config.logheader = false;
+    }
 
     if (config.ffmpeg.codec == undefined) {
         config.ffmpeg.codec = "mpeg2video";
@@ -3158,7 +3183,9 @@ function addprocess(req, spawn, user, streamservertype, streamserverArgs) {
             streamservername = streamserverArgs;
             // start streamserver 
             mystreamserverlistIndex = arrstreamserverlist.findIndex(val => val.streamname === streamservername);
+            if (mystreamserverlistIndex != -1) {
             arrstreamserverlist[mystreamserverlistIndex].status = "running";
+            }
 
     }
 
@@ -3201,6 +3228,34 @@ function checkStreamlink(url) {
 
 
 
+}
+
+function getsnapshotfromStream(url, width, height)
+{
+    var status = "";
+    var erro = "";
+    var base64image = "";
+
+    var child_process = require("child_process");
+    if(width == 0 || height == 0)
+    {
+        var command = config.streamlinkpath + "streamlink " + url + " best --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f image2 -";
+    }
+    else
+    {
+        var command = config.streamlinkpath + "streamlink " + url + " best --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f image2 -s " + width + "x" + height + " -";
+    }
+    
+
+    try {
+        retunrcommand = require('child_process').execSync(command);
+        base64image = retunrcommand.toString('base64');
+        status = "online";
+    } catch (e) {
+        status = "offline";
+        erro = e.message;
+    }
+    return { streamurl: url, streamstatus: status, mensagem: erro, snapshot: base64image };
 }
 
 function checkIfstreamlinkCanHandle(url) {
@@ -3775,6 +3830,14 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
         log("Show error in stream is enabled");
     }
 
+    /*
+    if (isCallFromBrowser(req) == true && isStreamServer == true) {
+        res.status(400).send(`<h2>it is no longer possible to create a stremserver directly from the url</h2><br>
+                              <p>you need to use the streamserver create wizard:</p> 
+                              <p><a href="http://${os.hostname}:${config.port}/streamserver/create">http://${os.hostname}:${config.port}/streamserver/create</a></p>`)
+        return false;
+    }
+*/
     //appsetheader(res);
 
     announceStreaming(url);
@@ -5568,7 +5631,7 @@ function CreateMenu(auth) {
     //var auth = basicAuth(req, res);
     html = '<nav class="navigator">'
     html += '<ul class="menuclass">'
-
+    
     if (auth.authenticated == true && auth.user != 'anonymous') {
         html += '<li class="menuoptions"><a href="/logout">Logout</a></li>'
         html += '<li class="menuoptions"><a href="/streamserver/list">Stream Servers</a></li>'
@@ -5576,6 +5639,9 @@ function CreateMenu(auth) {
         html += '<li class="menuoptions"><a href="/status">Status</a></li>'
         html += '<li class="menuoptions"><a href="/log">Logs</a></li>'
         html += '<li class="menuoptions"><a href="/docs/api/">API Documentation</a></li>'
+        
+        var userCode = '<span class=" menuoptions user-code">' + auth.user + '</span>';
+        html += '<li class="menuoptions" style="float:right;">' + userCode + '</li>'
     } else {
         html += '<li class="menuoptions"><a href="/login">Login</a></li>'
     }
@@ -5613,11 +5679,54 @@ function CreateMenuStyle() {
       
       .menuoptions a:hover {
         background-color: #111;
+      }
+      
+      .user-code {
+          color: #ffffff;
+          background-color: #000000;
+          padding: 5px 10px;
+          border-radius: 5px;
+          font-family: inherit;
+            font-size: inherit;
+            font-weight: inherit;
       }`
     return html;
 }
 
- 
+//function to check if a port is not in use
+function portIsOccupied(port) {
+    var net = require('net');
+    var isOccupied = false;
+    var checked = false;
+    
+    var server = net.createServer().listen(port);
+    
+    server.on('listening', () => {
+      server.close();
+      isOccupied = false; // porta disponível
+      checked = true;
+    });
+  
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE' || err.code === 'EACCES') {
+        isOccupied = true; // porta ocupada
+        checked = true;
+      }
+    });
+  
+    // Espera o servidor fechar antes de retornar o resultado
+    while (checked === false) {
+      require('deasync').runLoopOnce();
+    }
+  
+    return isOccupied;
+  }
+  
+  
+  
+
+
+
 
 
 /* end of program */

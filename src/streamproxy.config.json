@@ -1,0 +1,1 @@
+{"port":4211,"logConsole":true,"logWeb":false,"showErrorInStream":false,"streamlinkpath":"","ffmpegpath":"","ffmpeg":{"codec":"mpeg2video","format":"mpegts","serviceprovider":"streamproxy"},"streamserver":{"startOnInvoke":false,"hideStoppedStreamServerInPlaylist":true,"stopOnNoConnection":false}}
