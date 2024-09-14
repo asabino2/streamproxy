@@ -38,6 +38,7 @@ var databufheaderlen = 4;
 var mydatabuf = undefined;
 var streamserverstatus = [];
 var arrstreamserverlist = [];
+//var streamlinkconfigfile = process.env.streamlinkconfigfile;
 
 const crypto = require('crypto');
 const createHash = crypto.createHash;
@@ -175,7 +176,7 @@ app.get('/videostream/streamlink', (req, res) => {
     url = req.query.url;
 
     try {
-        runStream(req, res, spawn(config.streamlinkpath + "streamlink", [url, 'best', '-l', 'error', '--stdout']), "streamlink")
+        runStream(req, res, spawn(config.streamlinkpath + "streamlink", [url, '--config', '/config.txt', 'best', '-l', 'error', '--stdout']), "streamlink")
     } catch (e) {
         res.status(500).send("<h2>Internal Error, try again<h2>");
 
@@ -357,7 +358,7 @@ app.get('/audiostream/play', (req, res) => {
         case "streamlink":
             log(`opening connect to stream in url ${url} for audiconverter with streamlink and ffmpeg (from ${clientIP})`);
             if (os.platform != "win32") {
-                command = config.streamlinkpath + 'streamlink ' + url + ' worst --stdout | ' + config.ffmpegpath + 'ffmpeg  -loglevel error -i pipe:0 -c:v none -c:a libmp3lame -b:a 128k -joint_stereo 0 -y -f mp3 ' + metadata + ' -'
+                command = config.streamlinkpath + 'streamlink --config /config.txt' + url + ' worst --stdout | ' + config.ffmpegpath + 'ffmpeg  -loglevel error -i pipe:0 -c:v none -c:a libmp3lame -b:a 128k -joint_stereo 0 -y -f mp3 ' + metadata + ' -'
             } else {
                 command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' -c:v none -c:a libmp3lame -b:a 128k -joint_stereo 0 -y -f mp3 ' + metadata + '  -'
             }
@@ -464,7 +465,7 @@ app.get('/videostream/play', (req, res) => {
     }
 
 
-    command = config.streamlinkpath + 'streamlink ' + url + ' best --stdout | ' + config.ffmpegpath + 'ffmpeg -loglevel error -i pipe:0 ' + vcodec + ' ' + framesize + ' ' + framerate + ' ' + acodec + ' -b 15000k -strict -2 -mbd rd -copyinkf -flags +ilme+ildct -fflags +genpts ' + service_provider + ' ' + service_name + ' ' + vformat + ' -tune zerolatency -'
+    command = config.streamlinkpath + 'streamlink ' + url + ' --config /config.txt best --stdout | ' + config.ffmpegpath + 'ffmpeg -loglevel error -i pipe:0 ' + vcodec + ' ' + framesize + ' ' + framerate + ' ' + acodec + ' -b 15000k -strict -2 -mbd rd -copyinkf -flags +ilme+ildct -fflags +genpts ' + service_provider + ' ' + service_name + ' ' + vformat + ' -tune zerolatency -'
 
     log(`opening connect to stream in url ${url} for audiconverter with streamlink and ffmpeg (from ${clientIP})`);
     if (os.platform == 'win32') {
@@ -737,7 +738,7 @@ app.get('/videostream/restream', (req, res) => {
         case "streamlink":
             log(`opening connect for restream ${url} to ${output} with streamlink and ffmpeg (from ${clientIP})`);
             if (os.platform != "win32") {
-                command = config.streamlinkpath + 'streamlink ' + url + ' best --stdout | ' + config.ffmpegpath + 'ffmpeg  -loglevel error -i pipe:0 -f ' + format + ' ' + output;
+                command = config.streamlinkpath + 'streamlink ' + url + ' --config /config.txt best --stdout | ' + config.ffmpegpath + 'ffmpeg  -loglevel error -i pipe:0 -f ' + format + ' ' + output;
             } else {
                 command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' ' + vcodec + ' ' + acodec + '  -f ' + format + ' ' + output;
             }
@@ -3205,7 +3206,7 @@ function removeprocess(PID) {
 
 function ffprobeStreamlink(url) {
     var child_process = require("child_process");
-    var returncommand = child_process.execSync(config.streamlinkpath + "streamlink " + url + " best --stdout | " + config.ffmpegpath + "ffprobe -v quiet -print_format json -show_format -show_streams -show_programs -");
+    var returncommand = child_process.execSync(config.streamlinkpath + "streamlink " + url + " --config /config.txt best --stdout | " + config.ffmpegpath + "ffprobe -v quiet -print_format json -show_format -show_streams -show_programs -");
 
     return returncommand;
 }
@@ -3215,7 +3216,7 @@ function checkStreamlink(url) {
     var erro = "";
 
     var child_process = require("child_process");
-    var command = config.streamlinkpath + "streamlink " + url + " best --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f null -";
+    var command = config.streamlinkpath + "streamlink " + url + " --config /config.txt best --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f null -";
 
     try {
         retunrcommand = require('child_process').execSync(command);
@@ -3239,11 +3240,11 @@ function getsnapshotfromStream(url, width, height)
     var child_process = require("child_process");
     if(width == 0 || height == 0)
     {
-        var command = config.streamlinkpath + "streamlink " + url + " best --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f image2 -";
+        var command = config.streamlinkpath + "streamlink " + url + " --config /config.txt best --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f image2 -";
     }
     else
     {
-        var command = config.streamlinkpath + "streamlink " + url + " best --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f image2 -s " + width + "x" + height + " -";
+        var command = config.streamlinkpath + "streamlink " + url + " --config /config.txt best --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f image2 -s " + width + "x" + height + " -";
     }
     
 
@@ -3518,7 +3519,7 @@ function streamlinkHTTPServer(req, res, auth, port = 0) {
     url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
     log(`opening connect to server stream in url ${url} from ${clientIP}`);
 
-    const stream = spawn(config.streamlinkpath + "streamlink", ['--player-continuous-http', '--player-external-http-port', port, '--player-external-http', url, 'best']);
+    const stream = spawn(config.streamlinkpath + "streamlink", ['--config','/config.txt','--player-continuous-http', '--player-external-http-port', port, '--player-external-http', url, 'best']);
 
 
     var spawncommand = stream.spawnargs;
