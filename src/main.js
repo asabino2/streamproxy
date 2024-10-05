@@ -195,6 +195,7 @@ app.get('/videostream/ffmpeg', (req, res) => {
     var streamstart = false;
     var showErrorInStream = false;
     var streamerrorpid = 0;
+    var bitrates = undefined;
     var url = req.query.url;
     var vcodec = undefined;
     var acodec = undefined;
@@ -218,6 +219,14 @@ app.get('/videostream/ffmpeg', (req, res) => {
         acodec = config.ffmpeg.acodec;
     } else {
         acodec = "aac";
+    }
+
+    if (req.query.bitrate != undefined) {
+        bitrates = encodeURI(req.query.bitrate);
+    } else if (config.ffmpeg.bitrate != undefined) {
+        bitrates = config.ffmpeg.bitrate;
+    } else {
+        bitrates = "15000k";
     }
 
     if (req.query.serviceprovider != undefined) {
@@ -277,7 +286,7 @@ app.get('/videostream/ffmpeg', (req, res) => {
 
 
     ffmpegparams.push('-b');
-    ffmpegparams.push('15000k');
+    ffmpegparams.push(bitrates);
     ffmpegparams.push('-strict');
     ffmpegparams.push('-2');
     ffmpegparams.push('-mbd');
@@ -406,6 +415,7 @@ app.get('/videostream/play', (req, res) => {
     var vformat = undefined;
     var framesize = undefined;
     var framerate = undefined;
+    var bitrates = undefined;
     var service_provider = undefined;
     var service_name = undefined;
 
@@ -424,6 +434,14 @@ app.get('/videostream/play', (req, res) => {
         acodec = config.ffmpeg.acodec;
     } else {
         acodec = "aac";
+    }
+
+    if (req.query.bitrate != undefined) {
+        bitrates = encodeURI(req.query.bitrate);
+    } else if (config.ffmpeg.bitrate != undefined) {
+        bitrates = config.ffmpeg.bitrate;
+    } else {
+        bitrates = "15000k";
     }
 
     acodec = '-acodec ' + acodec;
@@ -464,8 +482,12 @@ app.get('/videostream/play', (req, res) => {
         framerate = '-r ' + encodeURI(req.query.framerate);
     }
 
+    if (req.query.bitrate != undefined) {
+        bitrates = '-b ' + encodeURI(req.query.bitrate);
+    }
 
-    command = config.streamlinkpath + 'streamlink ' + url + ' --config /config.txt best --stdout | ' + config.ffmpegpath + 'ffmpeg -loglevel error -i pipe:0 ' + vcodec + ' ' + framesize + ' ' + framerate + ' ' + acodec + ' -b 15000k -strict -2 -mbd rd -copyinkf -flags +ilme+ildct -fflags +genpts ' + service_provider + ' ' + service_name + ' ' + vformat + ' -tune zerolatency -'
+
+    command = config.streamlinkpath + 'streamlink ' + url + ' --config /config.txt best --stdout | ' + config.ffmpegpath + 'ffmpeg -loglevel error -i pipe:0 ' + vcodec + ' ' + framesize + ' ' + framerate + ' ' + acodec + ' ' + bitrates + ' -strict -2 -mbd rd -copyinkf -flags +ilme+ildct -fflags +genpts ' + service_provider + ' ' + service_name + ' ' + vformat + ' -tune zerolatency -'
 
     log(`opening connect to stream in url ${url} for audiconverter with streamlink and ffmpeg (from ${clientIP})`);
     if (os.platform == 'win32') {
@@ -3049,7 +3071,7 @@ app.get("/.well-known/ai-plugin.json", function (req, res) {
 })
 
 var server = app.listen(config.port);
-
+//var server = app.listen(8500);
 
 
 
@@ -4194,6 +4216,7 @@ function startStreamServer(streamname, req) {
         var audiocodec = mystreamserver.audiocodec;
         var framesize = mystreamserver.framesize;
         var framerate = mystreamserver.framerate;
+        var bitrate = mystreamserver.bitrate;
         var channelnumber = mystreamserver.channelnumber;
         var title = mystreamserver.title;
         var hasError = false;
@@ -4241,6 +4264,12 @@ function startStreamServer(streamname, req) {
             service_provider = "";
         } else {
             service_provider = "&serviceprovider=" + service_provider;
+        }
+
+        if (bitrate == "" || bitrate == undefined) {
+            bitrate = "";
+        } else {
+            bitrate = "&bitrate=" + bitrate;
         }
 
         /*
@@ -4300,7 +4329,7 @@ function startStreamServer(streamname, req) {
 
 
 
-        urltocall = "http://localhost:" + config.port + streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title;
+        urltocall = "http://localhost:" + config.port + streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title + bitrate;
 
         const http = require("http");
         var options = {};
@@ -4443,7 +4472,7 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
 
 
     if (actualdata == undefined) {
-        actualdata = { streamname: "", streamdescription: "", streamdescription: "", channelnumber: "", logourl: "", streammethod: "/videostream/streamlink", streamprovider: "", videoformat: "", videocodec: "", framesize: "", framerate: "", audiocodec: "", title: "", url: "" }
+        actualdata = { streamname: "", streamdescription: "", streamdescription: "", channelnumber: "", logourl: "", streammethod: "/videostream/streamlink", streamprovider: "", videoformat: "", videocodec: "", framesize: "", framerate: "", audiocodec: "", title: "", url: "", bitrate: "2000k" }
 
     }
 
@@ -4471,6 +4500,7 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
                     { name: "videocodec", description: "Video codec", required: false, type: "string", default: actualdata.videocodec },
                     { name: "framesize", description: "Frame size", required: false, type: "choice", default: actualdata.framesize, values: [{ description: "Auto (copy from original video)", value: "" }, { description: "320x240", value: "320x240" }, { description: "480p", value: "720x480" }, { description: "720p", value: "1280x720" }, { description: "1080p", value: "1920x1080" }, { description: "1440p", value: "2560x1440" }, { description: "4K", value: "3840x2160" }, { description: "8K", value: "7680x4320" }, { description: "16K", value: "15360x8640" }] },
                     { name: "framerate", description: "Frame rate", required: false, type: "choice", default: actualdata.framerate, values: [{ description: "Auto (copy from original video)", value: "" }, { description: "10fps", value: "10" }, { description: "15fps", value: "15" }, { description: "24fps", value: "24" }, { description: "25fps", value: "25" }, { description: "29.97fps", value: "29.97" }, { description: "30fps", value: "30" }, { description: "59.97fps", value: "59.97" }, { description: "60fps", value: "60" }] },
+                    { name: "bitrate", description: "Bitrate", required: false, type: "string", default: actualdata.bitrate },
                     { name: "audiocodec", description: "Audio codec", required: false, type: "string", default: actualdata.audiocodec },
 
                 ]
@@ -4966,7 +4996,7 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
           <label class="label">${labeldescription}</label><br>
           `;
             if (field.type != "choice") {
-                html += `<input id="${block.name}_${field.name}" name="${block.name}_${field.name}" class="secondaryinput" size="50" value="${field.default}"/><br /><br /><br />
+                html += `<input id="${block.name}_${field.name}" name="${block.name}_${field.name}" class="secondaryinput" size="50" value="${field.default || ""}"/><br /><br /><br />
                 `
             } else {
                 html += `<select id="${block.name}_${field.name}" name="${block.name}_${field.name}" class="secondaryinput" value="${field.default}">
