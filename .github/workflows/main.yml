@@ -1,0 +1,11 @@
+name: List Directory
+
+on: [push]
+
+jobs:
+  list-directory:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: List directory contents
+      run: ls -la
