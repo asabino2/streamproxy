@@ -3262,11 +3262,11 @@ function getsnapshotfromStream(url, width, height)
     var child_process = require("child_process");
     if(width == 0 || height == 0)
     {
-        var command = config.streamlinkpath + "streamlink " + url + " --config /config.txt best --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f image2 -";
+        var command = config.streamlinkpath + "streamlink " + url + " best --config /config.txt --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f image2 -";
     }
     else
     {
-        var command = config.streamlinkpath + "streamlink " + url + " --config /config.txt best --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f image2 -s " + width + "x" + height + " -";
+        var command = config.streamlinkpath + "streamlink " + url + " best --config /config.txt --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f image2 -s " + width + "x" + height + " -";
     }
     
 
