@@ -11,3 +11,6 @@ jobs:
       run: ls -laF
     - name: view the current directory
       run: pwd
+    - name: check if docker is installed
+      run: docker      
+   
