@@ -117,6 +117,20 @@
 </ul>
 <p>&nbsp;</p>
 <ul>
+<li>http://&lt;serverip&gt;:&lt;port&gt;/snapshot.jpg?url=&lt;livestreamurl&gt;
+<ul>
+<li>Capture a snapshot of stream to jpeg image</li>
+<li>Query parameters:
+<ul>
+<li>url =&gt; the url of livestream</li>
+<li>resolution =&gt; resolution of image (if ommited, return the original stream resolution)</li>
+</ul>
+</li>
+<li>Ex: http://localhost:3000/snapshot.jpg?url=?url=https://www.youtube.com/c/SkyNews/live<br />will be returned the snapshot of skynews in jpeg image format</li>
+</ul>
+</li>
+</ul>
+<ul>
 <li>http://&lt;serverip&gt;:&lt;port&gt;/streamserver/create
 <ul>
 <li>streamserver is a livestream server that allows with just one thread created and using the same streamproxy port you can provide the livestream to several clients, just access http://&lt;serverip&gt;:&lt;port&gt;/play/&lt;servername&gt;, where &lt; servername&gt; is the server name given at creation time. To close this server session, just kill the corresponding process in the status page (/status).&nbsp;<strong>Now compatible with streamlink, ffmpeg and convert videostream to audiolivestream</strong></li>

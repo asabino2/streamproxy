@@ -3070,6 +3070,21 @@ app.get("/.well-known/ai-plugin.json", function (req, res) {
     res.send(pluginjson);
 })
 
+app.get("/snapshot.jpg", function (req, res) {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+    url = req.query.url;
+    url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
+    //resolution = req.query.resolution;
+    const resolution = req.query.resolution || "0x0";
+    const [reswidth, resheight] = resolution.split('x');
+    var binfile = getbinaryimagefromStream(url, reswidth, resheight);
+    res.set({ 'Content-Type': 'image/jpeg' });
+    res.send(binfile);
+})
+
 var server = app.listen(config.port);
 //var server = app.listen(8500);
 
@@ -3255,6 +3270,35 @@ function checkStreamlink(url) {
 
 function getsnapshotfromStream(url, width, height)
 {
+    
+    var status = "";
+    var erro = "";
+    var base64image = "";
+    /*
+    var child_process = require("child_process");
+    if(width == 0 || height == 0)
+    {
+        var command = config.streamlinkpath + "streamlink " + url + " best --config /config.txt --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f image2 -";
+    }
+    else
+    {
+        var command = config.streamlinkpath + "streamlink " + url + " best --config /config.txt --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f image2 -s " + width + "x" + height + " -";
+    }
+    */
+    try {
+        //retunrcommand = require('child_process').execSync(command);
+        returncommand = getbinaryimagefromStream(url, width, height);
+        base64image = retunrcommand.toString('base64');
+        status = "online";
+    } catch (e) {
+        status = "offline";
+        erro = e.message;
+    }
+    return { streamurl: url, streamstatus: status, mensagem: erro, snapshot: base64image };
+}
+
+function getbinaryimagefromStream(url, width, height)
+{
     var status = "";
     var erro = "";
     var base64image = "";
@@ -3272,13 +3316,13 @@ function getsnapshotfromStream(url, width, height)
 
     try {
         retunrcommand = require('child_process').execSync(command);
-        base64image = retunrcommand.toString('base64');
-        status = "online";
+        return retunrcommand;
     } catch (e) {
         status = "offline";
         erro = e.message;
+        return {ststus: status, mensagem: erro};
     }
-    return { streamurl: url, streamstatus: status, mensagem: erro, snapshot: base64image };
+   
 }
 
 function checkIfstreamlinkCanHandle(url) {
