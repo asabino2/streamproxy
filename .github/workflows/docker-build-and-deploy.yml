@@ -31,7 +31,7 @@ jobs:
       - name: Build project
         run: |
           mkdir -p bin
-          npx pkg . --targets node18-linux-${{ matrix.arch }} --output ./bin/${{ matrix.bin_name }}
+          npx pkg ./src/main.js --targets node18-linux-${{ matrix.arch }} --output ./bin/${{ matrix.bin_name }}
 
       - name: Generate Dockerfile
         run: |
