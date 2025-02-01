@@ -1,0 +1,98 @@
+name: Build and Deploy Docker Images
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+        include:
+          - arch: x64
+            bin_name: streamproxy
+            target_platform: linux/amd64
+          - arch: arm64
+            bin_name: streamproxy-arm64
+            target_platform: linux/arm64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build project
+        run: |
+          mkdir -p bin
+          npx pkg . --targets node18-linux-${{ matrix.arch }} --output ./bin/${{ matrix.bin_name }}
+
+      - name: Generate Dockerfile
+        run: |
+          echo "FROM ubuntu" > Dockerfile.${{ matrix.arch }}
+          echo "RUN apt-get update" >> Dockerfile.${{ matrix.arch }}
+          echo "RUN apt install software-properties-common -y" >> Dockerfile.${{ matrix.arch }}
+          echo "RUN add-apt-repository ppa:nilarimogard/webupd8 -y" >> Dockerfile.${{ matrix.arch }}
+          echo "RUN apt-get update >> /tmp/update.txt 2>&1; awk '( /W:/ && /launchpad/ && /404/ ) { print substr($5,26) }' /tmp/update.txt > /tmp/awk.txt; awk -F '/' '{ print $1"/"$2 }' /tmp/awk.txt > /tmp/awk1.txt; uniq /tmp/awk1.txt > /tmp/awk2.txt" >> Dockerfile.${{ matrix.arch }}
+          echo "RUN apt install streamlink -y" >> Dockerfile.${{ matrix.arch }}
+          echo "ADD ./bin/${{ matrix.bin_name }} /usr/bin/streamproxy" >> Dockerfile.${{ matrix.arch }}
+          echo "RUN chmod +x /usr/bin/streamproxy" >> Dockerfile.${{ matrix.arch }}
+          echo "EXPOSE 4211" >> Dockerfile.${{ matrix.arch }}
+          echo "CMD streamproxy" >> Dockerfile.${{ matrix.arch }}
+
+      - name: Upload binaries and Dockerfiles
+        uses: actions/upload-artifact@v3
+        with:
+          name: binaries-${{ matrix.arch }}
+          path: |
+            ./bin/${{ matrix.bin_name }}
+            ./Dockerfile.${{ matrix.arch }}
+
+  docker:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+        include:
+          - arch: x64
+            bin_name: streamproxy
+            target_platform: linux/amd64
+            docker_tag: asabino2/streamproxy
+          - arch: arm64
+            bin_name: streamproxy-arm64
+            target_platform: linux/arm64
+            docker_tag: asabino2/streamproxy-arm64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Download binary and Dockerfile
+        uses: actions/download-artifact@v3
+        with:
+          name: binaries-${{ matrix.arch }}
+          path: ./bin
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile.${{ matrix.arch }}
+          platforms: ${{ matrix.target_platform }}
+          push: true
+          tags: ${{ matrix.docker_tag }}
