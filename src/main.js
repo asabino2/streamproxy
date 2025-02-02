@@ -476,14 +476,20 @@ app.get('/videostream/play', (req, res) => {
 
     if (req.query.framesize != undefined) {
         framesize = '-f ' + encodeURI(req.query.framesize);
+    } else {
+        framesize = "";
     }
 
     if (req.query.framerate != undefined) {
         framerate = '-r ' + encodeURI(req.query.framerate);
+    } else {
+        framerate = "";
     }
 
     if (req.query.bitrate != undefined) {
         bitrates = '-b ' + encodeURI(req.query.bitrate);
+    } else {
+        bitrates = "";
     }
 
 
