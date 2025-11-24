@@ -551,6 +551,7 @@ app.get('/streamserver/status', (req, res) => {
     var data = "";
     data += `<html>
             <head> 
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Stream server status</title>
             <link rel="stylesheet" href="/styles.css">
             <link rel="stylesheet" href="/toast.css">
@@ -1737,6 +1738,7 @@ app.get('/status', (req, res) => {
     var data = "";
     data += `<html>
             <head> 
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Status Page</title>
             <link rel="stylesheet" href="/styles.css">
             <link rel="stylesheet" href="/toast.css">
@@ -1927,6 +1929,7 @@ app.get('/streamserver/list', (req, res) => {
     var data = "";
     var data = `<html>
     <head> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title> Stream Server Manager</title>
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/toast.css">
@@ -2276,6 +2279,7 @@ app.get('/user/list', (req, res) => {
     var data = "";
     var data = `<html>
     <head> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Manager</title>
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/toast.css">
@@ -2475,6 +2479,7 @@ app.get('/status/*', (req, res) => {
 
     data += `<html>
     <head> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Status of PID ${pidtoSee}</title>
     <style>
     table {
@@ -2558,11 +2563,11 @@ app.get('/', async function(req, res) {
         let data = '';
         let menuStyle = CreateMenuStyle();
         let menu = CreateMenu(auth);
-        data += `<header>
-                <style>
-                 ${menuStyle}
-                </style>
-                </header>
+        data += `<html>
+                  <head>
+            <link rel="stylesheet" href="/styles.css">
+            <link rel="stylesheet" href="/toast.css">
+                </head>
                 <body>
                 ${menu}`
             // A chunk of data has been received.
@@ -2573,7 +2578,7 @@ app.get('/', async function(req, res) {
 
         // The whole response has been received. Print out the result.
         resp.on('end', () => {
-            data += `</body>`
+            data += `</body></html>`;
             data = data.replace(serverreplacer, req.hostname);
             data = data.replace(portreplacer, port);
             data = data.replace(localhostreplacer, req.hostname + ":" + port);
@@ -2591,6 +2596,7 @@ app.get('/docs/api', (req, res) => {
     var html = `<!doctype html> <!-- Important: must specify -->
  <html>
  <head>
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
    <title>StreamProxy API Documentation</title>
    <meta charset="utf-8"> <!-- Important: rapi-doc uses utf8 characters -->
    <script type="module" src="https://unpkg.com/rapidoc/dist/rapidoc-min.js"></script>
@@ -2610,166 +2616,266 @@ app.get('/styles.css', (req, res) => {
     var data = "";
     var menuStyle = CreateMenuStyle();
     data = `
-    
+    :root {
+        --primary-color: #007bff;
+        --secondary-color: #6c757d;
+        --success-color: #28a745;
+        --danger-color: #dc3545;
+        --light-color: #f8f9fa;
+        --dark-color: #343a40;
+        --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+        font-family: var(--font-family);
+        line-height: 1.6;
+        color: #333;
+        background-color: #f4f4f9;
+        margin: 0;
+        padding: 20px;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        color: var(--dark-color);
+        margin-bottom: 1rem;
+    }
+
     a {
+        color: var(--primary-color);
         text-decoration: none;
-        color: black;
+        transition: color 0.3s ease;
     }
 
-    a:hover { 
-        font-weight: 1200;
-        color: blue;
-        
+    a:hover {
+        color: #0056b3;
+        text-decoration: underline;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 1rem;
+        background-color: #fff;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    th, td {
+        padding: 12px 15px;
+        text-align: left;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    th {
+        background-color: var(--dark-color);
+        color: #fff;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+    }
+
+    tr:hover {
+        background-color: #f1f1f1;
+    }
+
+    /* Buttons */
+    button, .button {
+        display: inline-block;
+        font-weight: 400;
+        text-align: center;
+        white-space: nowrap;
+        vertical-align: middle;
+        user-select: none;
+        border: 1px solid transparent;
+        padding: 0.375rem 0.75rem;
+        font-size: 1rem;
+        line-height: 1.5;
+        border-radius: 0.25rem;
+        transition: color 0.15s, background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
+        cursor: pointer;
+        background-color: var(--primary-color);
+        color: white;
+    }
+
+    button:hover, .button:hover {
+        background-color: #0056b3;
+        text-decoration: none;
+    }
+
+    #killbutton {
+        background-color: var(--danger-color);
+    }
+
+    #killbutton:hover {
+        background-color: #c82333;
+    }
+
+    /* Forms */
+    input[type="text"], input[type="password"], select, textarea {
+        display: block;
+        width: 100%;
+        padding: 0.375rem 0.75rem;
+        font-size: 1rem;
+        line-height: 1.5;
+        color: #495057;
+        background-color: #fff;
+        background-clip: padding-box;
+        border: 1px solid #ced4da;
+        border-radius: 0.25rem;
+        transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        box-sizing: border-box;
+    }
+
+    input:focus, select:focus, textarea:focus {
+        border-color: #80bdff;
+        outline: 0;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+
+    /* Responsive Table */
+    @media screen and (max-width: 600px) {
+        table {
+            display: block;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+    }
+
+    /* Menu */
+    .menu {
+        background-color: #fff;
+        padding: 10px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .menu a {
+        padding: 8px 12px;
+        border-radius: 4px;
+        background-color: var(--light-color);
+        color: var(--dark-color);
+        font-weight: 500;
+    }
+
+    .menu a:hover {
+        background-color: var(--primary-color);
+        color: white;
+        text-decoration: none;
+    }
+
+    /* Toast */
+    #snackbar {
+        visibility: hidden;
+        min-width: 250px;
+        margin-left: -125px;
+        background-color: #333;
+        color: #fff;
+        text-align: center;
+        border-radius: 2px;
+        padding: 16px;
+        position: fixed;
+        z-index: 1;
+        left: 50%;
+        bottom: 30px;
+        font-size: 17px;
+    }
+
+    #snackbar.show {
+        visibility: visible;
+        -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        animation: fadein 0.5s, fadeout 0.5s 2.5s;
+    }
+
+    @-webkit-keyframes fadein {
+        from {bottom: 0; opacity: 0;} 
+        to {bottom: 30px; opacity: 1;}
+    }
+
+    @keyframes fadein {
+        from {bottom: 0; opacity: 0;}
+        to {bottom: 30px; opacity: 1;}
+    }
+
+    @-webkit-keyframes fadeout {
+        from {bottom: 30px; opacity: 1;} 
+        to {bottom: 0; opacity: 0;}
+    }
+
+    @keyframes fadeout {
+        from {bottom: 30px; opacity: 1;}
+        to {bottom: 0; opacity: 0;}
+    }
+
+    /* label status */
+    .label-status { 
+        border-radius: .25em; 
+        font-family: var(--font-family);
+        font-style: normal;
+        font-weight: 400;
+        font-size: 13px!important;
+        color: #fff; 
+        display: inline; 
+        font-size: 75%; 
+        font-weight: 700; 
+        line-height: 1; 
+        padding: .2em .6em .3em; 
+        text-align: center; 
+        vertical-align: baseline; 
+        white-space: nowrap;
+        margin: 0;
+        color: white; 
+        font-size: 14px; 
+        line-height: 1.42857143;
+        height: 100%; 
+        overflow-y: initial; 
+        width: 100%;
+    } 
+    
+    .label-status-green { 
+        background-color: var(--success-color);
+    } 
+    
+    .label-status-red {
+        background-color: var(--danger-color);
+    }
+
+    /* list buttons */
+    .listbutton {
+        text-decoration: none;
+        border: none;
+        padding: 8px 20px;
+        font-size: 12px;
+        color: #fff;
+        border-radius: 5px;
+        cursor: pointer;
+        outline: none;
+        transition: 0.2s all;
+    }
+
+    .listbutton-red {
+        background-color: var(--danger-color);
+    }
+    .listbutton-green {
+        background-color: var(--success-color);
+    }
+
+    .listbutton-blue {
+        background-color: var(--primary-color);
     }
     
-    table {
-        border-collapse: collapse;
-        width: 100%;
-        }
-        th, td {
-        padding: 8px;
-        text-align: left;
-        border-bottom: 1px solid #ddd;
-        }
-        tr:hover {background-color:#f5f5f5;}
-        th {
-             background-color: #ddd;
-           }
-
-           
-       
-           /* kill button */
-           #killbutton {
-            text-decoration: none;
-            border: none;
-            padding: 12px 40px;
-            font-size: 16px;
-            background-color: red;
-            color: #fff;
-            border-radius: 5px;
-            box-shadow: 7px 6px 28px 1px rgba(0, 0, 0, 0.24);
-            cursor: pointer;
-            outline: none;
-            transition: 0.2s all;
-        }
-        /* Adding transformation when the button is active */
-          
-        #killbutton:active {
-            transform: scale(0.98);
-            /* Scaling button to 0.98 to its original size */
-            box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
-            /* Lowering the shadow */
-        }
-        /* kill button end */
-           
-           @-webkit-keyframes fadein {
-             from {bottom: 0; opacity: 0;} 
-             to {bottom: 30px; opacity: 1;}
-           }
-           
-           @keyframes fadein {
-             from {bottom: 0; opacity: 0;}
-             to {bottom: 30px; opacity: 1;}
-           }
-           
-           @-webkit-keyframes fadeout {
-             from {bottom: 30px; opacity: 1;} 
-             to {bottom: 0; opacity: 0;}
-           }
-           
-           @keyframes fadeout {
-             from {bottom: 30px; opacity: 1;}
-             to {bottom: 0; opacity: 0;}
-           }
-           /* end of toast */                  
-           
-           textarea {
-            border: 1px solid #999999;
-            width: 100%;
-            height: 95%;
-            margin: 5px 0;
-            padding: 3px;
-            resize: none;
-          }
-          
-          /* label status */
-          .label-status { 
-            border-radius: .25em; 
-          font-family:Montserrat;
-          font-style:normal;
-          font-weight:400;
-          font-size: 13px!important;
-            color: #fff; 
-            display: inline; 
-            font-size: 75%; 
-            font-weight: 700; 
-            line-height: 1; 
-            padding: .2em .6em .3em; 
-            text-align: center; 
-            vertical-align: baseline; 
-            white-space: nowrap;
-        
-           margin:    0;
-            
-            color:   white; 
-            font-family:   Montserrat;
-            font-size:   14px; 
-            line-height:   1.42857143;
-            
-            height: 100%; 
-            overflow-y: initial; 
-            width: 100%;
-        } 
-        
-        .label-status-green { 
-            background-color: #5cb85c;
-        } 
-        
-        .label-status-red {
-          background-color: #D9534F;
-        }
-        /*end of Label status */
-        
-        /* list buttons */
-           .listbutton {
-            text-decoration: none;
-            border: none;
-            padding: 8px 20px;
-            font-size: 12px;
-            
-            color: #fff;
-            border-radius: 5px;
-            /* box-shadow: 7px 6px 6px 1px rgba(0, 0, 0, 0.24); */
-            cursor: pointer;
-            outline: none;
-            transition: 0.2s all;
-        }
-
-        .listbutton-red {
-            background-color: red;
-        }
-        .listbutton-green {
-            background-color: green;
-        }
-
-        .listbutton-blue {
-            background-color: blue;
-        }
-        /* Adding transformation when the button is active */
-          
-        .listbutton:active {
-            transform: scale(0.98);
-            /* Scaling button to 0.98 to its original size */
-            /* box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24); */
-            /* Lowering the shadow */
-        }
-              .listbutton:disabled {
-                
-                background-color: gray;
-              }
-        /* list button end */
-        
-        ${menuStyle}
+    .listbutton:active {
+        transform: scale(0.98);
+    }
+    .listbutton:disabled {
+        background-color: gray;
+    }
+    
+    ${menuStyle}
           `;
     res.send(data);
 });
@@ -2836,6 +2942,7 @@ app.get('/changepassword', (req, res) => {
 
     html += `<html>
     <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Change Password</title>
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/toast.css">`;
@@ -4569,6 +4676,7 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
     // main header
     html += `<html>
     <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     `
     if (method == "POST") {
         html += `<title>Create a Stream server</title>
@@ -5109,6 +5217,7 @@ function mountUserAdminPage(req, res, method = "POST", actualdata) {
 
     html += `<html>
     <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/toast.css">`;
 
@@ -5710,68 +5819,28 @@ function loadAuthRoles() {
 function CreateMenu(auth) {
     var html = '';
     //var auth = basicAuth(req, res);
-    html = '<nav class="navigator">'
-    html += '<ul class="menuclass">'
+    html = '<nav class="menu">'
     
     if (auth.authenticated == true && auth.user != 'anonymous') {
-        html += '<li class="menuoptions"><a href="/logout">Logout</a></li>'
-        html += '<li class="menuoptions"><a href="/streamserver/list">Stream Servers</a></li>'
-        html += '<li class="menuoptions"><a href="/user/list">Users</a></li>'
-        html += '<li class="menuoptions"><a href="/status">Status</a></li>'
-        html += '<li class="menuoptions"><a href="/log">Logs</a></li>'
-        html += '<li class="menuoptions"><a href="/docs/api/">API Documentation</a></li>'
+        html += '<a href="/logout">Logout</a>'
+        html += '<a href="/streamserver/list">Stream Servers</a>'
+        html += '<a href="/user/list">Users</a>'
+        html += '<a href="/status">Status</a>'
+        html += '<a href="/log">Logs</a>'
+        html += '<a href="/docs/api/">API Documentation</a>'
         
-        var userCode = '<span class=" menuoptions user-code">' + auth.user + '</span>';
-        html += '<li class="menuoptions" style="float:right;">' + userCode + '</li>'
+        var userCode = '<span class="user-code" style="margin-left: auto; align-self: center; font-weight: bold;">' + auth.user + '</span>';
+        html += userCode
     } else {
-        html += '<li class="menuoptions"><a href="/login">Login</a></li>'
+        html += '<a href="/login">Login</a>'
     }
-    html += '</ul>'
     html += '</nav>'
     return html;
 }
 
 
 function CreateMenuStyle() {
-    var html = '';
-    html = `/* menu style */
-    .navigator {
-     background-color: #333;
-      }
-      
-      .menuclass {
-        list-style-type: none;
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-      }
-      
-      .menuoptions {
-        float: left;
-      }
-      
-      .menuoptions a {
-        display: block;
-        color: white;
-        text-align: center;
-        padding: 14px 16px;
-        text-decoration: none;
-      }
-      
-      .menuoptions a:hover {
-        background-color: #111;
-      }
-      
-      .user-code {
-          color: #ffffff;
-          background-color: #000000;
-          padding: 5px 10px;
-          border-radius: 5px;
-          font-family: inherit;
-            font-size: inherit;
-            font-weight: inherit;
-      }`
-    return html;
+    return "";
 }
 
 //function to check if a port is not in use
