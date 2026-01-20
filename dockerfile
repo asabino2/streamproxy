@@ -15,6 +15,7 @@ RUN pip3 install -U streamlink --break-system-packages
 
 # 3. Setup workspace
 RUN mkdir /streamproxyprj
+RUN mkdir /data
 WORKDIR /streamproxyprj
 
 # 4. Clone the repository
