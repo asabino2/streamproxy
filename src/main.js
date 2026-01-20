@@ -42,7 +42,8 @@ var arrstreamserverlist = [];
 
 const crypto = require('crypto');
 const createHash = crypto.createHash;
-const datadirectory = argv['datadirectory'] || process.env.STREAMPROXY_DATA_DIR || './';
+//const datadirectory = argv['datadirectory'] || process.env.STREAMPROXY_DATA_DIR || './';
+const datadirectory = argv['datadirectory'] || process.env.STREAMPROXY_DATA_DIR || '/data/';
 
 
 
