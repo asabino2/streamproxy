@@ -405,7 +405,7 @@
 <hr />
 <h1>Install via Docker</h1>
 <p><br />via CLI</p>
-<pre><code>docker run -d --name streamproxy -p 4211:4211 -v ./streamproxy.config.json:/streamproxy.config.json -v ./streamproxy.streamservers.json:/streamproxy.streamservers.json -v ./streamproxy.users.json:/streamproxy.users.json -v ./streamproxy.authroles.json:/streamproxy.authroles.json -v ./config.txt:/config.txt -e YOUTUBE_API_KEY={YOUTUBE_API} asabino2/streamproxy
+<pre><code>docker run -d --name streamproxy -p 4211:4211 -v ./data:/data -v ./config.txt:/config.txt -e YOUTUBE_API_KEY={YOUTUBE_API} asabino2/streamproxy
 </code></pre>
 <p>Docker compose</p>
 <pre><code>
@@ -417,11 +417,8 @@ services:
     ports:
       - "4211:4211"
     volumes:
-      - ./streamproxy.config.json:/streamproxy.config.json
-      - ./streamproxy.streamservers.json:/streamproxy.streamservers.json
-      - ./streamproxy.users.json:/streamproxy.users.json
-      - ./streamproxy.authroles.json:/streamproxy.authroles.json
-      - ./config.txt:/config.txt
+      - ./data:/data
+      - ./config.txt:/config.txt:rw
     environment:
       - YOUTUBE_API_KEY=${YOUTUBE_API}
     restart: unless-stopped
