@@ -105,6 +105,14 @@ var pageTitle = "";
 
 const bodyParser = require('body-parser');
 const { application, response } = require('express');
+const showdown = require('showdown');
+const markdownConverter = new showdown.Converter({
+    tables: true,
+    ghCompatibleHeaderId: true,
+    simplifiedAutoLink: true,
+    strikethrough: true,
+    tasklists: true
+});
 
 loadconfig();
 //console.log(`port ${config.port} is occupied: ${portIsOccupied(config.port)}`);
@@ -2550,8 +2558,8 @@ app.get('/', async function(req, res) {
     }
     const port = getPortCalled(req)
     const https = require("https");
-    const serversearch = "&lt;serverip&gt;";
-    const portsearch = "&lt;port&gt;";
+    const serversearch = "(&lt;serverip&gt;|<serverip>)";
+    const portsearch = "(&lt;port&gt;|<port>)";
     const localhostsearch = "localhost:3000";
 
     const serverreplacer = new RegExp(serversearch, 'g');
@@ -2562,6 +2570,7 @@ app.get('/', async function(req, res) {
     appsetheader(res);
     https.get('https://raw.githubusercontent.com/asabino2/streamproxy/master/README.md', (resp) => {
         let data = '';
+        let markdownData = '';
         let menuStyle = CreateMenuStyle();
         let menu = CreateMenu(auth);
         data += `<html>
@@ -2573,16 +2582,24 @@ app.get('/', async function(req, res) {
                 ${menu}`
             // A chunk of data has been received.
         resp.on('data', (chunk) => {
-            data += chunk;
+            markdownData += chunk.toString();
 
         });
 
         // The whole response has been received. Print out the result.
         resp.on('end', () => {
+            markdownData = markdownData.replace(serverreplacer, req.hostname);
+            markdownData = markdownData.replace(portreplacer, port);
+            markdownData = markdownData.replace(localhostreplacer, req.hostname + ":" + port);
+
+            try {
+                data += markdownConverter.makeHtml(markdownData);
+            } catch (e) {
+                log("Markdown conversion error: " + e.message);
+                data += `<pre>${markdownData.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
+            }
+
             data += `</body></html>`;
-            data = data.replace(serverreplacer, req.hostname);
-            data = data.replace(portreplacer, port);
-            data = data.replace(localhostreplacer, req.hostname + ":" + port);
             res.send(data);
         });
 
