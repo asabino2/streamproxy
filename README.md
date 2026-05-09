@@ -1,23 +1,14 @@
-# 🎥 Streamproxy
+<p align="center">
+  <img src="./streamproxy_app_icon.png" alt="Streamproxy Logo" width="320" />
+</p>
 
-![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
-![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-blue)
-![Status](https://img.shields.io/badge/status-active-brightgreen)
-
-Streamproxy is a proxy for livestreams.
-
----
-
-## ⚠️ Important information
-
-- **Important info 1:** the default password of admin user is `admin`.
-  - After login with this user, please change the password using:
-  - `http://<serverip>:<port>/changepassword`
-
-- **Important info 2:** starting with version `1.3.9` we no longer make binaries available in releases.
-  - In this case, prefer using the Docker version (see below).
-  - You can still clone this repository and compile the code at your own risk.
+<p align="center">
+  <img src="https://img.shields.io/github/package-json/v/asabino2/streamproxy?color=6A5CFF" alt="Version from package.json" />
+  <img src="https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white" alt="Node.js 18+" />
+  <img src="https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white" alt="Docker ready" />
+  <img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-blue" alt="Platform Linux and Windows" />
+  <img src="https://img.shields.io/badge/status-active-brightgreen" alt="Status active" />
+</p>
 
 ---
 
