@@ -2564,19 +2564,7 @@ app.get('/settings', (req, res) => {
       {code:'zh', label:'中文'},
       {code:'ja', label:'日本語'}
     ];
-    var SP_THEMES = [
-      {value:'default', label:'Padrão (Azul)'},
-      {value:'dark', label:'Escuro'},
-      {value:'sunrise', label:'Amanhecer'},
-      {value:'forest', label:'Floresta'},
-      {value:'ocean', label:'Oceano'},
-      {value:'purple', label:'Púrpura'},
-      {value:'rose', label:'Rosa'},
-      {value:'orange', label:'Laranja'},
-      {value:'graphite', label:'Grafite'},
-      {value:'sapphire', label:'Safira'},
-      {value:'contrast', label:'Alto Contraste'}
-    ];
+    var SP_THEME_KEYS = ['default','dark','sunrise','forest','ocean','purple','rose','orange','graphite','sapphire','contrast'];
     function initSettings() {
       var langSel = document.getElementById('settingsLanguage');
       SP_LANGUAGES.forEach(function(l){
@@ -2586,9 +2574,10 @@ app.get('/settings', (req, res) => {
       });
       langSel.value = localStorage.getItem('sp_lang') || 'pt';
       var themeSel = document.getElementById('settingsTheme');
-      SP_THEMES.forEach(function(t){
+      SP_THEME_KEYS.forEach(function(k){
         var opt = document.createElement('option');
-        opt.value = t.value; opt.textContent = t.label;
+        opt.value = k;
+        opt.textContent = (typeof SP_T === 'function') ? SP_T('theme.' + k) : k;
         themeSel.appendChild(opt);
       });
       themeSel.value = localStorage.getItem('sp_theme') || 'default';
@@ -2609,7 +2598,8 @@ app.get('/settings', (req, res) => {
       var theme = document.getElementById('settingsTheme').value;
       applyLang(lang);
       applyTheme(theme);
-      displayToast('green', 'Configurações salvas! Recarregando...');
+      var msg = (typeof SP_T === 'function') ? SP_T('settings.saved') : 'Configurações salvas! Recarregando...';
+      displayToast('green', msg);
       setTimeout(function(){ location.reload(); }, 1200);
     }
   </script>
@@ -2617,20 +2607,20 @@ app.get('/settings', (req, res) => {
 <body onload="initSettings()">
   ${menu}
   <div class="settings-page">
-    <h1>Configurações</h1>
+    <h1 data-i18n="settings.title">Configurações</h1>
     <div class="settings-card">
       <div class="settings-section">
-        <h2>Idioma</h2>
-        <p>Selecione o idioma de toda a interface</p>
+        <h2 data-i18n="settings.lang">Idioma</h2>
+        <p data-i18n="settings.lang.desc">Selecione o idioma de toda a interface</p>
         <select id="settingsLanguage" class="settings-select"></select>
       </div>
       <div class="settings-section">
-        <h2>Tema</h2>
-        <p>Personalize a aparência da interface</p>
+        <h2 data-i18n="settings.theme">Tema</h2>
+        <p data-i18n="settings.theme.desc">Personalize a aparência da interface</p>
         <select id="settingsTheme" class="settings-select"></select>
       </div>
       <div>
-        <button onclick="saveSettings()" class="btn btn--primary">Salvar configurações</button>
+        <button onclick="saveSettings()" class="btn btn--primary" data-i18n="settings.save">Salvar configurações</button>
       </div>
     </div>
   </div>
@@ -2683,16 +2673,16 @@ app.get('/about', (req, res) => {
           var status = document.getElementById('aboutUpdateStatus');
           wrap.style.display = 'flex';
           if (latest === CURRENT_VERSION) {
-            status.textContent = '✅ Você está na versão mais recente.';
+            status.textContent = (typeof SP_T==='function') ? SP_T('about.up_to_date') : '✅ Você está na versão mais recente.';
           } else {
-            status.textContent = '⬆️ Nova versão disponível: ' + latest;
+            status.textContent = ((typeof SP_T==='function') ? SP_T('about.new_version') : '⬆️ Nova versão disponível:') + ' ' + latest;
             if (IS_ADMIN && btn) { btn.classList.remove('hidden'); }
           }
         } catch(e) {
-          document.getElementById('aboutLatestVersion').textContent = 'Erro';
+          document.getElementById('aboutLatestVersion').textContent = (typeof SP_T==='function') ? SP_T('about.error') : 'Erro';
         }
       };
-      x.onerror = function() { document.getElementById('aboutLatestVersion').textContent = 'Indisponível'; };
+      x.onerror = function() { document.getElementById('aboutLatestVersion').textContent = (typeof SP_T==='function') ? SP_T('about.unavailable') : 'Indisponível'; };
       x.send();
       loadChangelog();
     }
@@ -2711,9 +2701,13 @@ app.get('/about', (req, res) => {
           else if (line.startsWith('- ')) { if(!inList){html+='<ul>';inList=true;} html += '<li>' + line.substring(2) + '</li>'; }
         }
         if(inList) html += '</ul>';
-        document.getElementById('aboutChangelog').innerHTML = html || '<p>Veja o README.md no GitHub para o changelog completo.</p>';
+        var fallback = (typeof SP_T==='function') ? SP_T('about.readme_fallback') : 'Veja o README.md no GitHub para o changelog completo.';
+        document.getElementById('aboutChangelog').innerHTML = html || '<p>' + fallback + '</p>';
       };
-      cx.onerror = function(){ document.getElementById('aboutChangelog').innerHTML = '<p>Não foi possível carregar o changelog.</p>'; };
+      cx.onerror = function(){
+        var errMsg = (typeof SP_T==='function') ? SP_T('about.readme_error') : 'Não foi possível carregar o changelog.';
+        document.getElementById('aboutChangelog').innerHTML = '<p>' + errMsg + '</p>';
+      };
       cx.send();
     }
   </script>
@@ -2721,31 +2715,31 @@ app.get('/about', (req, res) => {
 <body onload="loadAboutData()">
   ${menu}
   <div class="about-page">
-    <h1>Sobre</h1>
+    <h1 data-i18n="about.title">Sobre</h1>
     <div class="about-card">
       <div class="about-logo-wrap">
         <img src="/streamproxy_app_icon.png" class="about-logo" alt="StreamProxy"/>
         <h2>StreamProxy</h2>
       </div>
-      <p class="about-description">Proxy e servidor de streams de vídeo e áudio com suporte a múltiplos métodos de transmissão.</p>
-      <p class="about-author">Desenvolvido por Alexander Sabino</p>
+      <p class="about-description" data-i18n="about.desc">Proxy e servidor de streams de vídeo e áudio com suporte a múltiplos métodos de transmissão.</p>
+      <p class="about-author" data-i18n="about.author">Desenvolvido por Alexander Sabino</p>
       <div class="about-version-grid">
         <div class="about-version-item">
-          <span class="about-version-label">Versão atual</span>
+          <span class="about-version-label" data-i18n="about.current_ver">Versão atual</span>
           <strong id="aboutCurrentVersion">—</strong>
         </div>
         <div class="about-version-item">
-          <span class="about-version-label">Última versão</span>
-          <strong id="aboutLatestVersion">Verificando...</strong>
+          <span class="about-version-label" data-i18n="about.latest_ver">Última versão</span>
+          <strong id="aboutLatestVersion" data-i18n="about.checking">Verificando...</strong>
         </div>
       </div>
       <div id="aboutUpdateWrap" class="about-update-wrap" style="display:none">
         <span id="aboutUpdateStatus" class="about-update-status"></span>
-        ${isAdmin ? '<a href="https://github.com/asabino2/streamproxy/releases" target="_blank" id="aboutUpdateBtn" class="btn btn--primary hidden">Ver lançamentos</a>' : ''}
+        ${isAdmin ? '<a href="https://github.com/asabino2/streamproxy/releases" target="_blank" id="aboutUpdateBtn" class="btn btn--primary hidden" data-i18n="about.releases">Ver lançamentos</a>' : ''}
       </div>
       <div class="about-changelog">
-        <h3>Últimas alterações</h3>
-        <div id="aboutChangelog"><p style="font-style:italic;color:var(--text-muted)">Carregando...</p></div>
+        <h3 data-i18n="about.changelog">Últimas alterações</h3>
+        <div id="aboutChangelog"><p style="font-style:italic;color:var(--text-muted)" data-i18n="about.loading">Carregando...</p></div>
       </div>
     </div>
   </div>
@@ -6078,20 +6072,65 @@ function CreateMenu(auth) {
     var html = `<script>
 (function(){
   var SP_TRANS = {
-    pt: { "nav.home":"Home","nav.servers":"Stream Servers","nav.users":"Usuários","nav.status":"Status","nav.logs":"Logs","nav.api":"API Docs","nav.settings":"Configurações","nav.about":"Sobre","nav.logout":"Sair","nav.login":"Entrar" },
-    en: { "nav.home":"Home","nav.servers":"Stream Servers","nav.users":"Users","nav.status":"Status","nav.logs":"Logs","nav.api":"API Docs","nav.settings":"Settings","nav.about":"About","nav.logout":"Logout","nav.login":"Login" },
-    es: { "nav.home":"Inicio","nav.servers":"Servidores","nav.users":"Usuarios","nav.status":"Estado","nav.logs":"Registros","nav.api":"API Docs","nav.settings":"Ajustes","nav.about":"Acerca de","nav.logout":"Salir","nav.login":"Entrar" },
-    de: { "nav.home":"Startseite","nav.servers":"Stream-Server","nav.users":"Benutzer","nav.status":"Status","nav.logs":"Protokolle","nav.api":"API Docs","nav.settings":"Einstellungen","nav.about":"Über","nav.logout":"Abmelden","nav.login":"Anmelden" },
-    it: { "nav.home":"Home","nav.servers":"Server Stream","nav.users":"Utenti","nav.status":"Stato","nav.logs":"Log","nav.api":"API Docs","nav.settings":"Impostazioni","nav.about":"Informazioni","nav.logout":"Esci","nav.login":"Accedi" },
-    ru: { "nav.home":"Главная","nav.servers":"Серверы","nav.users":"Пользователи","nav.status":"Статус","nav.logs":"Журнал","nav.api":"API Docs","nav.settings":"Настройки","nav.about":"О программе","nav.logout":"Выйти","nav.login":"Войти" },
-    zh: { "nav.home":"首页","nav.servers":"流服务器","nav.users":"用户","nav.status":"状态","nav.logs":"日志","nav.api":"API 文档","nav.settings":"设置","nav.about":"关于","nav.logout":"退出","nav.login":"登录" },
-    ja: { "nav.home":"ホーム","nav.servers":"ストリームサーバー","nav.users":"ユーザー","nav.status":"ステータス","nav.logs":"ログ","nav.api":"API ドキュメント","nav.settings":"設定","nav.about":"について","nav.logout":"ログアウト","nav.login":"ログイン" }
+    pt: {
+      "nav.home":"Home","nav.servers":"Stream Servers","nav.users":"Usuários","nav.status":"Status","nav.logs":"Logs","nav.api":"API Docs","nav.settings":"Configurações","nav.about":"Sobre","nav.logout":"Sair","nav.login":"Entrar",
+      "settings.title":"Configurações","settings.lang":"Idioma","settings.lang.desc":"Selecione o idioma de toda a interface","settings.theme":"Tema","settings.theme.desc":"Personalize a aparência da interface","settings.save":"Salvar configurações","settings.saved":"Configurações salvas! Recarregando...",
+      "theme.default":"Padrão (Azul)","theme.dark":"Escuro","theme.sunrise":"Amanhecer","theme.forest":"Floresta","theme.ocean":"Oceano","theme.purple":"Púrpura","theme.rose":"Rosa","theme.orange":"Laranja","theme.graphite":"Grafite","theme.sapphire":"Safira","theme.contrast":"Alto Contraste",
+      "about.title":"Sobre","about.desc":"Proxy e servidor de streams de vídeo e áudio com suporte a múltiplos métodos de transmissão.","about.author":"Desenvolvido por Alexander Sabino","about.current_ver":"Versão atual","about.latest_ver":"Última versão","about.checking":"Verificando...","about.changelog":"Últimas alterações","about.loading":"Carregando...","about.up_to_date":"✅ Você está na versão mais recente.","about.new_version":"⬆️ Nova versão disponível:","about.releases":"Ver lançamentos","about.error":"Erro","about.unavailable":"Indisponível","about.readme_fallback":"Veja o README.md no GitHub para o changelog completo.","about.readme_error":"Não foi possível carregar o changelog."
+    },
+    en: {
+      "nav.home":"Home","nav.servers":"Stream Servers","nav.users":"Users","nav.status":"Status","nav.logs":"Logs","nav.api":"API Docs","nav.settings":"Settings","nav.about":"About","nav.logout":"Logout","nav.login":"Login",
+      "settings.title":"Settings","settings.lang":"Language","settings.lang.desc":"Select the interface language","settings.theme":"Theme","settings.theme.desc":"Customize the interface appearance","settings.save":"Save settings","settings.saved":"Settings saved! Reloading...",
+      "theme.default":"Default (Blue)","theme.dark":"Dark","theme.sunrise":"Sunrise","theme.forest":"Forest","theme.ocean":"Ocean","theme.purple":"Purple","theme.rose":"Rose","theme.orange":"Orange","theme.graphite":"Graphite","theme.sapphire":"Sapphire","theme.contrast":"High Contrast",
+      "about.title":"About","about.desc":"Video and audio stream proxy with support for multiple transmission methods.","about.author":"Developed by Alexander Sabino","about.current_ver":"Current version","about.latest_ver":"Latest version","about.checking":"Checking...","about.changelog":"Changelog","about.loading":"Loading...","about.up_to_date":"✅ You are on the latest version.","about.new_version":"⬆️ New version available:","about.releases":"View releases","about.error":"Error","about.unavailable":"Unavailable","about.readme_fallback":"See README.md on GitHub for the full changelog.","about.readme_error":"Could not load changelog."
+    },
+    es: {
+      "nav.home":"Inicio","nav.servers":"Servidores","nav.users":"Usuarios","nav.status":"Estado","nav.logs":"Registros","nav.api":"API Docs","nav.settings":"Ajustes","nav.about":"Acerca de","nav.logout":"Salir","nav.login":"Entrar",
+      "settings.title":"Ajustes","settings.lang":"Idioma","settings.lang.desc":"Seleccione el idioma de la interfaz","settings.theme":"Tema","settings.theme.desc":"Personalice la apariencia de la interfaz","settings.save":"Guardar ajustes","settings.saved":"¡Ajustes guardados! Recargando...",
+      "theme.default":"Predeterminado (Azul)","theme.dark":"Oscuro","theme.sunrise":"Amanecer","theme.forest":"Bosque","theme.ocean":"Océano","theme.purple":"Púrpura","theme.rose":"Rosa","theme.orange":"Naranja","theme.graphite":"Grafito","theme.sapphire":"Zafiro","theme.contrast":"Alto Contraste",
+      "about.title":"Acerca de","about.desc":"Proxy de flujos de vídeo y audio con soporte para múltiples métodos de transmisión.","about.author":"Desarrollado por Alexander Sabino","about.current_ver":"Versión actual","about.latest_ver":"Última versión","about.checking":"Comprobando...","about.changelog":"Últimos cambios","about.loading":"Cargando...","about.up_to_date":"✅ Estás en la versión más reciente.","about.new_version":"⬆️ Nueva versión disponible:","about.releases":"Ver lanzamientos","about.error":"Error","about.unavailable":"No disponible","about.readme_fallback":"Vea el README.md en GitHub para el changelog completo.","about.readme_error":"No se pudo cargar el changelog."
+    },
+    de: {
+      "nav.home":"Startseite","nav.servers":"Stream-Server","nav.users":"Benutzer","nav.status":"Status","nav.logs":"Protokolle","nav.api":"API Docs","nav.settings":"Einstellungen","nav.about":"Über","nav.logout":"Abmelden","nav.login":"Anmelden",
+      "settings.title":"Einstellungen","settings.lang":"Sprache","settings.lang.desc":"Sprache der Benutzeroberfläche auswählen","settings.theme":"Thema","settings.theme.desc":"Erscheinungsbild der Benutzeroberfläche anpassen","settings.save":"Einstellungen speichern","settings.saved":"Einstellungen gespeichert! Wird neu geladen...",
+      "theme.default":"Standard (Blau)","theme.dark":"Dunkel","theme.sunrise":"Sonnenaufgang","theme.forest":"Wald","theme.ocean":"Ozean","theme.purple":"Lila","theme.rose":"Rosa","theme.orange":"Orange","theme.graphite":"Graphit","theme.sapphire":"Saphir","theme.contrast":"Hoher Kontrast",
+      "about.title":"Über","about.desc":"Video- und Audio-Stream-Proxy mit Unterstützung mehrerer Übertragungsmethoden.","about.author":"Entwickelt von Alexander Sabino","about.current_ver":"Aktuelle Version","about.latest_ver":"Neueste Version","about.checking":"Wird geprüft...","about.changelog":"Änderungsprotokoll","about.loading":"Wird geladen...","about.up_to_date":"✅ Sie haben die neueste Version.","about.new_version":"⬆️ Neue Version verfügbar:","about.releases":"Versionen ansehen","about.error":"Fehler","about.unavailable":"Nicht verfügbar","about.readme_fallback":"Siehe README.md auf GitHub für das vollständige Changelog.","about.readme_error":"Changelog konnte nicht geladen werden."
+    },
+    it: {
+      "nav.home":"Home","nav.servers":"Server Stream","nav.users":"Utenti","nav.status":"Stato","nav.logs":"Log","nav.api":"API Docs","nav.settings":"Impostazioni","nav.about":"Informazioni","nav.logout":"Esci","nav.login":"Accedi",
+      "settings.title":"Impostazioni","settings.lang":"Lingua","settings.lang.desc":"Seleziona la lingua dell'interfaccia","settings.theme":"Tema","settings.theme.desc":"Personalizza l'aspetto dell'interfaccia","settings.save":"Salva impostazioni","settings.saved":"Impostazioni salvate! Ricaricamento...",
+      "theme.default":"Predefinito (Blu)","theme.dark":"Scuro","theme.sunrise":"Alba","theme.forest":"Foresta","theme.ocean":"Oceano","theme.purple":"Viola","theme.rose":"Rosa","theme.orange":"Arancione","theme.graphite":"Grafite","theme.sapphire":"Zaffiro","theme.contrast":"Alto Contrasto",
+      "about.title":"Informazioni","about.desc":"Proxy per stream video e audio con supporto per più metodi di trasmissione.","about.author":"Sviluppato da Alexander Sabino","about.current_ver":"Versione attuale","about.latest_ver":"Ultima versione","about.checking":"Controllo in corso...","about.changelog":"Ultime modifiche","about.loading":"Caricamento...","about.up_to_date":"✅ Sei alla versione più recente.","about.new_version":"⬆️ Nuova versione disponibile:","about.releases":"Vedi versioni","about.error":"Errore","about.unavailable":"Non disponibile","about.readme_fallback":"Vedi README.md su GitHub per il changelog completo.","about.readme_error":"Impossibile caricare il changelog."
+    },
+    ru: {
+      "nav.home":"Главная","nav.servers":"Серверы","nav.users":"Пользователи","nav.status":"Статус","nav.logs":"Журнал","nav.api":"API Docs","nav.settings":"Настройки","nav.about":"О программе","nav.logout":"Выйти","nav.login":"Войти",
+      "settings.title":"Настройки","settings.lang":"Язык","settings.lang.desc":"Выберите язык интерфейса","settings.theme":"Тема","settings.theme.desc":"Настройте внешний вид интерфейса","settings.save":"Сохранить настройки","settings.saved":"Настройки сохранены! Перезагрузка...",
+      "theme.default":"По умолчанию (Синий)","theme.dark":"Тёмный","theme.sunrise":"Рассвет","theme.forest":"Лес","theme.ocean":"Океан","theme.purple":"Фиолетовый","theme.rose":"Розовый","theme.orange":"Оранжевый","theme.graphite":"Графит","theme.sapphire":"Сапфировый","theme.contrast":"Высокий контраст",
+      "about.title":"О программе","about.desc":"Прокси-сервер для видео- и аудиопотоков с поддержкой нескольких методов передачи.","about.author":"Разработано Alexander Sabino","about.current_ver":"Текущая версия","about.latest_ver":"Последняя версия","about.checking":"Проверка...","about.changelog":"Журнал изменений","about.loading":"Загрузка...","about.up_to_date":"✅ Вы используете последнюю версию.","about.new_version":"⬆️ Доступна новая версия:","about.releases":"Просмотр выпусков","about.error":"Ошибка","about.unavailable":"Недоступно","about.readme_fallback":"Смотрите README.md на GitHub для полного журнала изменений.","about.readme_error":"Не удалось загрузить журнал изменений."
+    },
+    zh: {
+      "nav.home":"首页","nav.servers":"流服务器","nav.users":"用户","nav.status":"状态","nav.logs":"日志","nav.api":"API 文档","nav.settings":"设置","nav.about":"关于","nav.logout":"退出","nav.login":"登录",
+      "settings.title":"设置","settings.lang":"语言","settings.lang.desc":"选择界面语言","settings.theme":"主题","settings.theme.desc":"自定义界面外观","settings.save":"保存设置","settings.saved":"设置已保存！正在重新加载...",
+      "theme.default":"默认（蓝色）","theme.dark":"深色","theme.sunrise":"日出","theme.forest":"森林","theme.ocean":"海洋","theme.purple":"紫色","theme.rose":"玫瑰","theme.orange":"橙色","theme.graphite":"石墨","theme.sapphire":"蓝宝石","theme.contrast":"高对比度",
+      "about.title":"关于","about.desc":"支持多种传输方式的视频和音频流代理服务器。","about.author":"由 Alexander Sabino 开发","about.current_ver":"当前版本","about.latest_ver":"最新版本","about.checking":"检查中...","about.changelog":"更改日志","about.loading":"加载中...","about.up_to_date":"✅ 您使用的是最新版本。","about.new_version":"⬆️ 有新版本可用:","about.releases":"查看发布","about.error":"错误","about.unavailable":"不可用","about.readme_fallback":"请在 GitHub 上查看 README.md 获取完整的更改日志。","about.readme_error":"无法加载更改日志。"
+    },
+    ja: {
+      "nav.home":"ホーム","nav.servers":"ストリームサーバー","nav.users":"ユーザー","nav.status":"ステータス","nav.logs":"ログ","nav.api":"API ドキュメント","nav.settings":"設定","nav.about":"について","nav.logout":"ログアウト","nav.login":"ログイン",
+      "settings.title":"設定","settings.lang":"言語","settings.lang.desc":"インターフェース言語を選択","settings.theme":"テーマ","settings.theme.desc":"インターフェースの外観をカスタマイズ","settings.save":"設定を保存","settings.saved":"設定が保存されました！再読み込み中...",
+      "theme.default":"デフォルト（青）","theme.dark":"ダーク","theme.sunrise":"サンライズ","theme.forest":"フォレスト","theme.ocean":"オーシャン","theme.purple":"パープル","theme.rose":"ローズ","theme.orange":"オレンジ","theme.graphite":"グラファイト","theme.sapphire":"サファイア","theme.contrast":"ハイコントラスト",
+      "about.title":"について","about.desc":"複数の伝送方式をサポートするビデオ・オーディオストリームプロキシ。","about.author":"Alexander Sabino 開発","about.current_ver":"現在のバージョン","about.latest_ver":"最新バージョン","about.checking":"確認中...","about.changelog":"変更履歴","about.loading":"読み込み中...","about.up_to_date":"✅ 最新バージョンを使用しています。","about.new_version":"⬆️ 新しいバージョンが利用可能です:","about.releases":"リリースを見る","about.error":"エラー","about.unavailable":"利用不可","about.readme_fallback":"完全な変更履歴は GitHub の README.md をご覧ください。","about.readme_error":"変更履歴を読み込めませんでした。"
+    }
   };
   var t = localStorage.getItem('sp_theme') || 'default';
   if (t !== 'default') document.documentElement.setAttribute('data-theme', t);
+  var _spLang = localStorage.getItem('sp_lang') || 'pt';
+  window.SP_LANG = _spLang;
+  window.SP_T = function(key) {
+    var tr = SP_TRANS[_spLang] || SP_TRANS.pt;
+    return (tr && tr[key]) ? tr[key] : (SP_TRANS.pt[key] || key);
+  };
   document.addEventListener('DOMContentLoaded', function(){
-    var lang = localStorage.getItem('sp_lang') || 'pt';
-    var tr = SP_TRANS[lang] || SP_TRANS.pt;
+    var tr = SP_TRANS[_spLang] || SP_TRANS.pt;
     document.querySelectorAll('[data-i18n]').forEach(function(el){
       var k = el.getAttribute('data-i18n');
       if (tr[k]) el.textContent = tr[k];
