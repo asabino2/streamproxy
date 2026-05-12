@@ -5093,19 +5093,19 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
         }
     
         if(checkForSpecialCharacter(streamdescription) == true){
-          alert("don't use special character in service description");
+          alert(typeof SP_T==='function'?SP_T('form.ss.err.special_desc'):"don't use special character in service description");
           document.getElementById("streamdescription").style.borderColor = "red"
           return false;
         }
     
         if(checkForSpecialCharacter(streamname) == true){
-          alert("don't use special character in service name");
+          alert(typeof SP_T==='function'?SP_T('form.ss.err.special_name'):"don't use special character in service name");
           document.getElementById("streamname").style.borderColor = "red"
           return false;
         }
     
         if(onlyNumbers(channelnumber) == false && channelnumber != ""){
-          alert('in channel number field, use only numbers');
+          alert(typeof SP_T==='function'?SP_T('form.ss.err.channel'):'in channel number field, use only numbers');
           document.getElementById("channelnumber").style.borderColor = "red";
           return false;
         }
@@ -5149,7 +5149,7 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
           }
       
           if(hasError == true){
-            alert('fill all required fields in red');
+            alert(typeof SP_T==='function'?SP_T('form.ss.err.required'):'fill all required fields in red');
             return false;
           } 
     `
@@ -5244,12 +5244,12 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
     if (method == "POST") {
         html += `if (response.streamadded == true) {
                 //document.getElementById("logdiv").innerHTML = "<h2>stream server has added in list<h2>"
-                displayToast("green","stream server has added in list");
+                displayToast("green",typeof SP_T==='function'?SP_T('form.ss.msg.added'):"stream server has added in list");
                 `
     } else {
         html += `if (response.streamchanged == true) {
                 //document.getElementById("logdiv").innerHTML = "<h2>stream server has change<h2>";
-                displayToast("green","stream server has changed");
+                displayToast("green",typeof SP_T==='function'?SP_T('form.ss.msg.changed'):"stream server has changed");
                 `
     }
     html += `
@@ -5333,11 +5333,11 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
       <div id="main">`
     if (method == "POST") {
         html += `
-        <center><h1>Create a Stream server</h1></center>
-        <h2><center>use this page to create a streamserver and serve it to multiple users (only one thread per stream server is created)<center></h2>`
+        <center><h1 data-i18n="form.ss.title_create">Create a Stream server</h1></center>
+        <h2><center><span data-i18n="form.ss.desc_create">use this page to create a streamserver and serve it to multiple users (only one thread per stream server is created)</span></center></h2>`
     } else if (method == "PUT") {
         html += `
-        <center><h1>Edit stream Server ${actualdata.streamname}</h1></center>
+        <center><h1><span data-i18n="form.ss.title_edit">Edit Stream Server</span> — ${actualdata.streamname}</h1></center>
         <h2><center><center></h2>`
     }
 
@@ -5346,7 +5346,7 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
       <div id="forms">
       <!-- streamname -->
             <div id="streamnamediv" > 
-          <label  for="streamname" class="label" id="teste">Streaming Name:</label><br>
+          <label  for="streamname" class="label" id="teste" data-i18n="form.ss.lbl.name">Streaming Name:</label><br>
           `
     if (method == "POST") {
         html += `<input id="streamname" name="streamname" class="secondaryinput" size="50" value=""/><br /><br /><br /> 
@@ -5359,14 +5359,14 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
         </div>
       <!-- stream description-->
           <div id="streamdescriptiondiv" >
-             <label class="label">Stream Description (optional):</label> <br>
+             <label class="label" data-i18n="form.ss.lbl.description">Stream Description (optional):</label> <br>
           <input id="streamdescription" name="streamdescription" class="secondaryinput" size="50" value="${pagedata.mainfields.streamdescription}"/><br /><br /><br />
         </div>
         
                    
                      <!-- stream methods -->
                      <div id="streammethoddiv" >
-                     <label  class="label">Streaming Method:</label> <br>
+                     <label  class="label" data-i18n="form.ss.lbl.method">Streaming Method:</label> <br>
                      <select id="streammethod" name="streammethod" class="secondaryinput" onchange = "enabledisablefields()" value="${pagedata.mainfields.methoddefault}">`;
     pagedata.methods.forEach(data => {
         if (data.linuxonly != true || os.platform == "linux") {
@@ -5391,7 +5391,7 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
             labeldescription += `:`;
             html += `<!-- ${block.name}:${field.description} -->
           <div id="${block.name}_${field.name}div">
-          <label class="label">${labeldescription}</label><br>
+          <label class="label" data-i18n="form.ss.field.${block.name}_${field.name}">${labeldescription}</label><br>
           `;
             if (field.type != "choice") {
                 html += `<input id="${block.name}_${field.name}" name="${block.name}_${field.name}" class="secondaryinput" size="50" value="${field.default || ""}"/><br /><br /><br />
@@ -5417,19 +5417,19 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
     })
     html += `
     <div id="channelnumberdiv">
-    <label class="label">Channel Number (optional):</label> <br>
+    <label class="label" data-i18n="form.ss.lbl.channel">Channel Number (optional):</label> <br>
  <input id="channelnumber" name="channelnumber" class="secondaryinput" size="50" value="${pagedata.mainfields.channelnumber}"/><br /><br /><br />
- <label class="label">LogoUrl (optional):</label> <br>
+ <label class="label" data-i18n="form.ss.lbl.logourl">LogoUrl (optional):</label> <br>
  <input id="logourl" name="logourl" class="secondaryinput" size="50" value="${pagedata.mainfields.logourl}"/><br /><br /><br />
 </div>
 
     <!-- url --> 
     <div id="urldiv"> 
-      <label  class="label">Url:</label><br>
-     <input id="url" name="url" size="50" id="urllabel" placeholder="URL to stream" class="secondaryinput" value="${pagedata.mainfields.url}"/><br /><br><br />
+      <label  class="label" data-i18n="form.ss.lbl.url">Url:</label><br>
+     <input id="url" name="url" size="50" id="urllabel" placeholder="URL to stream" data-i18n-ph="form.ss.ph.url" class="secondaryinput" value="${pagedata.mainfields.url}"/><br /><br><br />
      <center>
-     <button onclick="maintainserver()" id="maintainserverbutton" >Save</button>
-     <button onclick="resetData()" id="resetbutton" >Reset</button>
+     <button onclick="maintainserver()" id="maintainserverbutton" ><span data-i18n="form.btn.save">Save</span></button>
+     <button onclick="resetData()" id="resetbutton" ><span data-i18n="form.btn.reset">Reset</span></button>
      </center>
    </div>
    </div>
@@ -5623,12 +5623,12 @@ function mountUserAdminPage(req, res, method = "POST", actualdata) {
     if (method == "POST") {
         html += `if (response.useradded == true) {
                 //document.getElementById("logdiv").innerHTML = "<h2>user created<h2>"
-                displayToast("green","user created");
+                displayToast("green",typeof SP_T==='function'?SP_T('form.user.msg.created'):"user created");
                 `
     } else {
         html += `if (response.userchanged == true) {
                 //document.getElementById("logdiv").innerHTML = "<h2>user changed<h2>";
-                displayToast("green","user changed");
+                displayToast("green",typeof SP_T==='function'?SP_T('form.user.msg.changed'):"user changed");
                 `
     }
     html += `
@@ -5694,11 +5694,11 @@ function mountUserAdminPage(req, res, method = "POST", actualdata) {
       <div id="main">`
     if (method == "POST") {
         html += `
-        <center><h1>Create User</h1></center>
-        <h2><center>use this page to create a new user<center></h2>`
+        <center><h1 data-i18n="form.user.title_create">Create User</h1></center>
+        <h2><center><span data-i18n="form.user.desc_create">use this page to create a new user</span></center></h2>`
     } else if (method == "PUT") {
         html += `
-        <center><h1>Edit user ${actualdata.username}</h1></center>
+        <center><h1><span data-i18n="form.user.title_edit">Edit User</span> — ${actualdata.username}</h1></center>
         <h2><center><center></h2>`
     }
 
@@ -5707,7 +5707,7 @@ function mountUserAdminPage(req, res, method = "POST", actualdata) {
       <div id="forms">
       <!-- streamname -->
             <div id="userdiv" > 
-          <label  for="username" class="label" id="teste">Username:</label><br>
+          <label  for="username" class="label" id="teste" data-i18n="form.user.lbl.username">Username:</label><br>
           `
     if (method == "POST") {
         html += `<input id="username" name="username" class="secondaryinput" size="50" value=""/><br /><br /><br /> 
@@ -5720,7 +5720,7 @@ function mountUserAdminPage(req, res, method = "POST", actualdata) {
         </div>
       <!-- Full Name-->
           <div id="fullnamediv" >
-             <label class="label">Full Name:</label> <br>
+             <label class="label" data-i18n="form.user.lbl.fullname">Full Name:</label> <br>
           <input id="fullname" name="fullname" class="secondaryinput" size="50" value="${actualdata.fullname}"/><br /><br /><br />
         </div>
         `
@@ -5728,7 +5728,7 @@ function mountUserAdminPage(req, res, method = "POST", actualdata) {
         html += `
         <!-- password-->
           <div id="passworddiv" >
-             <label class="label">Password:</label> <br>
+             <label class="label" data-i18n="form.user.lbl.password">Password:</label> <br>
           <input type="password" id="password" name="password" class="secondaryinput" size="50" value="${actualdata.password}"/><br /><br /><br />
         </div>
         `
@@ -5736,7 +5736,7 @@ function mountUserAdminPage(req, res, method = "POST", actualdata) {
     html += `
                    <div id="rolesdiv">
                    <fieldset>
-                    <legend> Authorization Roles </legend>
+                    <legend data-i18n="form.user.lbl.roles"> Authorization Roles </legend>
                     `
     authroles.forEach(role => {
         html += `<div>
@@ -5757,8 +5757,8 @@ function mountUserAdminPage(req, res, method = "POST", actualdata) {
 
                     
      <center>
-     <button onclick="maintainuser()" id="maintainuserbutton" >Save</button>
-     <button onclick="resetData()" id="resetbutton" >Reset</button>
+     <button onclick="maintainuser()" id="maintainuserbutton" ><span data-i18n="form.btn.save">Save</span></button>
+     <button onclick="resetData()" id="resetbutton" ><span data-i18n="form.btn.reset">Reset</span></button>
      </center>
    </div>
    </div>
@@ -6132,6 +6132,17 @@ function CreateMenu(auth) {
     ja:{ "ss.btn.start_all":"すべて開始","ss.btn.stop_all":"すべて停止","ss.btn.add_server":"サーバーを追加","ss.btn.playlist":"プレイリストをDL","ss.th.name":"ストリーム名","ss.th.channel":"チャンネル番号","ss.th.desc":"説明","ss.th.url":"URL","ss.th.type":"タイプ","ss.th.endpoint":"エンドポイント","ss.th.status":"ステータス","ss.th.transfer":"平均データ転送","ss.th.connections":"接続数","ss.th.command":"操作","ss.status.running":"実行中","ss.status.stopped":"停止","ss.btn.start":"開始","ss.btn.stop":"停止","ss.btn.edit":"編集","ss.btn.delete":"削除","ss.msg.started":"StreamServer %s を開始しました","ss.msg.stopped":"StreamServer %s を停止しました","ss.msg.deleted":"StreamServer %s を削除しました","ss.confirm.delete":"ストリームサーバー %s を削除しますか？","user.btn.add":"ユーザーを追加","user.th.username":"ユーザー名","user.th.fullname":"フルネーム","user.th.command":"操作","user.msg.deleted":"ユーザー %s を削除しました","user.confirm.delete":"ユーザー %s を削除しますか？","err.http":"HTTP エラー" }
   };
   Object.keys(SP_EXTRA).forEach(function(l){ if(SP_TRANS[l]) Object.assign(SP_TRANS[l], SP_EXTRA[l]); });
+  var SP_EXTRA2 = {
+    pt:{"form.btn.save":"Salvar","form.btn.reset":"Redefinir","form.ss.title_create":"Criar Stream Server","form.ss.title_edit":"Editar Stream Server","form.ss.desc_create":"Use esta página para criar um servidor e servi-lo a múltiplos usuários (apenas uma thread por servidor)","form.ss.lbl.name":"Nome do Stream:","form.ss.lbl.description":"Descrição do Stream (opcional):","form.ss.lbl.method":"Método de Streaming:","form.ss.lbl.channel":"Número do Canal (opcional):","form.ss.lbl.logourl":"URL do Logo (opcional):","form.ss.lbl.url":"URL:","form.ss.ph.url":"URL para transmitir","form.ss.msg.added":"Servidor de stream adicionado","form.ss.msg.changed":"Servidor de stream alterado","form.ss.err.special_desc":"Não use caracteres especiais na descrição","form.ss.err.special_name":"Não use caracteres especiais no nome","form.ss.err.channel":"No campo número do canal, use apenas números","form.ss.err.required":"Preencha todos os campos obrigatórios em vermelho","form.ss.field.ffmpeg_streamprovider":"Provedor(opcional):","form.ss.field.ffmpeg_videoformat":"Formato de Vídeo(opcional):","form.ss.field.ffmpeg_videocodec":"Codec de Vídeo(opcional):","form.ss.field.ffmpeg_framesize":"Tamanho do Frame(opcional):","form.ss.field.ffmpeg_framerate":"Taxa de Frames(opcional):","form.ss.field.ffmpeg_bitrate":"Bitrate(opcional):","form.ss.field.ffmpeg_audiocodec":"Codec de Áudio(opcional):","form.ss.field.Audiostream_title":"Título(opcional):","form.user.title_create":"Criar Usuário","form.user.title_edit":"Editar Usuário","form.user.desc_create":"Use esta página para criar um novo usuário","form.user.lbl.username":"Usuário:","form.user.lbl.fullname":"Nome Completo:","form.user.lbl.password":"Senha:","form.user.lbl.roles":"Funções de Autorização","form.user.msg.created":"Usuário criado","form.user.msg.changed":"Usuário alterado"},
+    en:{"form.btn.save":"Save","form.btn.reset":"Reset","form.ss.title_create":"Create a Stream server","form.ss.title_edit":"Edit Stream Server","form.ss.desc_create":"use this page to create a streamserver and serve it to multiple users (only one thread per stream server is created)","form.ss.lbl.name":"Streaming Name:","form.ss.lbl.description":"Stream Description (optional):","form.ss.lbl.method":"Streaming Method:","form.ss.lbl.channel":"Channel Number (optional):","form.ss.lbl.logourl":"LogoUrl (optional):","form.ss.lbl.url":"Url:","form.ss.ph.url":"URL to stream","form.ss.msg.added":"stream server has added in list","form.ss.msg.changed":"stream server has changed","form.ss.err.special_desc":"don't use special character in service description","form.ss.err.special_name":"don't use special character in service name","form.ss.err.channel":"in channel number field, use only numbers","form.ss.err.required":"fill all required fields in red","form.ss.field.ffmpeg_streamprovider":"Provider(optional):","form.ss.field.ffmpeg_videoformat":"Video format(optional):","form.ss.field.ffmpeg_videocodec":"Video codec(optional):","form.ss.field.ffmpeg_framesize":"Frame size(optional):","form.ss.field.ffmpeg_framerate":"Frame rate(optional):","form.ss.field.ffmpeg_bitrate":"Bitrate(optional):","form.ss.field.ffmpeg_audiocodec":"Audio codec(optional):","form.ss.field.Audiostream_title":"Title(optional):","form.user.title_create":"Create User","form.user.title_edit":"Edit User","form.user.desc_create":"use this page to create a new user","form.user.lbl.username":"Username:","form.user.lbl.fullname":"Full Name:","form.user.lbl.password":"Password:","form.user.lbl.roles":"Authorization Roles","form.user.msg.created":"user created","form.user.msg.changed":"user changed"},
+    es:{"form.btn.save":"Guardar","form.btn.reset":"Restablecer","form.ss.title_create":"Crear Servidor de Stream","form.ss.title_edit":"Editar Servidor de Stream","form.ss.desc_create":"Use esta página para crear un servidor de stream para múltiples usuarios","form.ss.lbl.name":"Nombre del Stream:","form.ss.lbl.description":"Descripción (opcional):","form.ss.lbl.method":"Método de Streaming:","form.ss.lbl.channel":"Número de Canal (opcional):","form.ss.lbl.logourl":"URL del Logo (opcional):","form.ss.lbl.url":"URL:","form.ss.ph.url":"URL del stream","form.ss.msg.added":"servidor de stream agregado","form.ss.msg.changed":"servidor de stream modificado","form.ss.err.special_desc":"No use caracteres especiales en la descripción","form.ss.err.special_name":"No use caracteres especiales en el nombre","form.ss.err.channel":"En el campo número de canal, use solo números","form.ss.err.required":"Complete todos los campos obligatorios en rojo","form.ss.field.ffmpeg_streamprovider":"Proveedor(opcional):","form.ss.field.ffmpeg_videoformat":"Formato de Vídeo(opcional):","form.ss.field.ffmpeg_videocodec":"Codec de Vídeo(opcional):","form.ss.field.ffmpeg_framesize":"Tamaño de Frame(opcional):","form.ss.field.ffmpeg_framerate":"Tasa de Frames(opcional):","form.ss.field.ffmpeg_bitrate":"Bitrate(opcional):","form.ss.field.ffmpeg_audiocodec":"Codec de Audio(opcional):","form.ss.field.Audiostream_title":"Título(opcional):","form.user.title_create":"Crear Usuario","form.user.title_edit":"Editar Usuario","form.user.desc_create":"Use esta página para crear un nuevo usuario","form.user.lbl.username":"Usuario:","form.user.lbl.fullname":"Nombre Completo:","form.user.lbl.password":"Contraseña:","form.user.lbl.roles":"Roles de Autorización","form.user.msg.created":"usuario creado","form.user.msg.changed":"usuario modificado"},
+    de:{"form.btn.save":"Speichern","form.btn.reset":"Zurücksetzen","form.ss.title_create":"Stream-Server erstellen","form.ss.title_edit":"Stream-Server bearbeiten","form.ss.desc_create":"Erstellen Sie hier einen Stream-Server für mehrere Benutzer (ein Thread pro Server)","form.ss.lbl.name":"Stream-Name:","form.ss.lbl.description":"Stream-Beschreibung (optional):","form.ss.lbl.method":"Streaming-Methode:","form.ss.lbl.channel":"Kanalnummer (optional):","form.ss.lbl.logourl":"Logo-URL (optional):","form.ss.lbl.url":"URL:","form.ss.ph.url":"Stream-URL","form.ss.msg.added":"Stream-Server hinzugefügt","form.ss.msg.changed":"Stream-Server geändert","form.ss.err.special_desc":"Keine Sonderzeichen in der Beschreibung","form.ss.err.special_name":"Keine Sonderzeichen im Namen","form.ss.err.channel":"Im Feld Kanalnummer nur Zahlen verwenden","form.ss.err.required":"Alle Pflichtfelder (rot) ausfüllen","form.ss.field.ffmpeg_streamprovider":"Anbieter(optional):","form.ss.field.ffmpeg_videoformat":"Videoformat(optional):","form.ss.field.ffmpeg_videocodec":"Video-Codec(optional):","form.ss.field.ffmpeg_framesize":"Framegröße(optional):","form.ss.field.ffmpeg_framerate":"Framerate(optional):","form.ss.field.ffmpeg_bitrate":"Bitrate(optional):","form.ss.field.ffmpeg_audiocodec":"Audio-Codec(optional):","form.ss.field.Audiostream_title":"Titel(optional):","form.user.title_create":"Benutzer erstellen","form.user.title_edit":"Benutzer bearbeiten","form.user.desc_create":"Erstellen Sie hier einen neuen Benutzer","form.user.lbl.username":"Benutzername:","form.user.lbl.fullname":"Vollständiger Name:","form.user.lbl.password":"Passwort:","form.user.lbl.roles":"Berechtigungsrollen","form.user.msg.created":"Benutzer erstellt","form.user.msg.changed":"Benutzer geändert"},
+    it:{"form.btn.save":"Salva","form.btn.reset":"Reimposta","form.ss.title_create":"Crea Stream Server","form.ss.title_edit":"Modifica Stream Server","form.ss.desc_create":"Usa questa pagina per creare un server stream per più utenti (un thread per server)","form.ss.lbl.name":"Nome Stream:","form.ss.lbl.description":"Descrizione (opzionale):","form.ss.lbl.method":"Metodo Streaming:","form.ss.lbl.channel":"Numero Canale (opzionale):","form.ss.lbl.logourl":"URL Logo (opzionale):","form.ss.lbl.url":"URL:","form.ss.ph.url":"URL da trasmettere","form.ss.msg.added":"server stream aggiunto","form.ss.msg.changed":"server stream modificato","form.ss.err.special_desc":"Non usare caratteri speciali nella descrizione","form.ss.err.special_name":"Non usare caratteri speciali nel nome","form.ss.err.channel":"Nel campo numero canale, usa solo numeri","form.ss.err.required":"Compila tutti i campi obbligatori in rosso","form.ss.field.ffmpeg_streamprovider":"Provider(opzionale):","form.ss.field.ffmpeg_videoformat":"Formato Video(opzionale):","form.ss.field.ffmpeg_videocodec":"Codec Video(opzionale):","form.ss.field.ffmpeg_framesize":"Dimensione Frame(opzionale):","form.ss.field.ffmpeg_framerate":"Frame Rate(opzionale):","form.ss.field.ffmpeg_bitrate":"Bitrate(opzionale):","form.ss.field.ffmpeg_audiocodec":"Codec Audio(opzionale):","form.ss.field.Audiostream_title":"Titolo(opzionale):","form.user.title_create":"Crea Utente","form.user.title_edit":"Modifica Utente","form.user.desc_create":"Usa questa pagina per creare un nuovo utente","form.user.lbl.username":"Nome utente:","form.user.lbl.fullname":"Nome completo:","form.user.lbl.password":"Password:","form.user.lbl.roles":"Ruoli di Autorizzazione","form.user.msg.created":"utente creato","form.user.msg.changed":"utente modificato"},
+    ru:{"form.btn.save":"Сохранить","form.btn.reset":"Сбросить","form.ss.title_create":"Создать стрим-сервер","form.ss.title_edit":"Изменить стрим-сервер","form.ss.desc_create":"Используйте эту страницу для создания стрим-сервера для нескольких пользователей","form.ss.lbl.name":"Имя потока:","form.ss.lbl.description":"Описание потока (необязательно):","form.ss.lbl.method":"Метод стриминга:","form.ss.lbl.channel":"Номер канала (необязательно):","form.ss.lbl.logourl":"URL логотипа (необязательно):","form.ss.lbl.url":"URL:","form.ss.ph.url":"URL для стриминга","form.ss.msg.added":"стрим-сервер добавлен","form.ss.msg.changed":"стрим-сервер изменён","form.ss.err.special_desc":"Не используйте спецсимволы в описании","form.ss.err.special_name":"Не используйте спецсимволы в имени","form.ss.err.channel":"В поле номера канала используйте только цифры","form.ss.err.required":"Заполните все обязательные поля (выделены красным)","form.ss.field.ffmpeg_streamprovider":"Провайдер(необязательно):","form.ss.field.ffmpeg_videoformat":"Формат видео(необязательно):","form.ss.field.ffmpeg_videocodec":"Видео-кодек(необязательно):","form.ss.field.ffmpeg_framesize":"Размер кадра(необязательно):","form.ss.field.ffmpeg_framerate":"Частота кадров(необязательно):","form.ss.field.ffmpeg_bitrate":"Битрейт(необязательно):","form.ss.field.ffmpeg_audiocodec":"Аудио-кодек(необязательно):","form.ss.field.Audiostream_title":"Заголовок(необязательно):","form.user.title_create":"Создать пользователя","form.user.title_edit":"Изменить пользователя","form.user.desc_create":"Используйте эту страницу для создания нового пользователя","form.user.lbl.username":"Имя пользователя:","form.user.lbl.fullname":"Полное имя:","form.user.lbl.password":"Пароль:","form.user.lbl.roles":"Роли авторизации","form.user.msg.created":"пользователь создан","form.user.msg.changed":"пользователь изменён"},
+    zh:{"form.btn.save":"保存","form.btn.reset":"重置","form.ss.title_create":"创建流服务器","form.ss.title_edit":"编辑流服务器","form.ss.desc_create":"使用此页面为多个用户创建流服务器（每个服务器一个线程）","form.ss.lbl.name":"流名称:","form.ss.lbl.description":"流描述（可选）:","form.ss.lbl.method":"流方法:","form.ss.lbl.channel":"频道号（可选）:","form.ss.lbl.logourl":"Logo URL（可选）:","form.ss.lbl.url":"URL:","form.ss.ph.url":"流的URL","form.ss.msg.added":"流服务器已添加","form.ss.msg.changed":"流服务器已更改","form.ss.err.special_desc":"描述中不要使用特殊字符","form.ss.err.special_name":"名称中不要使用特殊字符","form.ss.err.channel":"频道号字段只允许使用数字","form.ss.err.required":"请填写所有红色标注的必填字段","form.ss.field.ffmpeg_streamprovider":"提供商（可选）:","form.ss.field.ffmpeg_videoformat":"视频格式（可选）:","form.ss.field.ffmpeg_videocodec":"视频编解码器（可选）:","form.ss.field.ffmpeg_framesize":"帧大小（可选）:","form.ss.field.ffmpeg_framerate":"帧率（可选）:","form.ss.field.ffmpeg_bitrate":"比特率（可选）:","form.ss.field.ffmpeg_audiocodec":"音频编解码器（可选）:","form.ss.field.Audiostream_title":"标题（可选）:","form.user.title_create":"创建用户","form.user.title_edit":"编辑用户","form.user.desc_create":"使用此页面创建新用户","form.user.lbl.username":"用户名:","form.user.lbl.fullname":"全名:","form.user.lbl.password":"密码:","form.user.lbl.roles":"授权角色","form.user.msg.created":"用户已创建","form.user.msg.changed":"用户已更改"},
+    ja:{"form.btn.save":"保存","form.btn.reset":"リセット","form.ss.title_create":"ストリームサーバー作成","form.ss.title_edit":"ストリームサーバー編集","form.ss.desc_create":"このページでストリームサーバーを作成し複数ユーザーに配信できます（サーバーごとに1スレッド）","form.ss.lbl.name":"ストリーム名:","form.ss.lbl.description":"ストリーム説明（任意）:","form.ss.lbl.method":"ストリーミング方式:","form.ss.lbl.channel":"チャンネル番号（任意）:","form.ss.lbl.logourl":"ロゴURL（任意）:","form.ss.lbl.url":"URL:","form.ss.ph.url":"ストリームURL","form.ss.msg.added":"ストリームサーバーを追加しました","form.ss.msg.changed":"ストリームサーバーを変更しました","form.ss.err.special_desc":"説明に特殊文字を使用しないでください","form.ss.err.special_name":"名前に特殊文字を使用しないでください","form.ss.err.channel":"チャンネル番号フィールドには数字のみ使用可能","form.ss.err.required":"赤いすべての必須フィールドを入力してください","form.ss.field.ffmpeg_streamprovider":"プロバイダー（任意）:","form.ss.field.ffmpeg_videoformat":"ビデオ形式（任意）:","form.ss.field.ffmpeg_videocodec":"映像コーデック（任意）:","form.ss.field.ffmpeg_framesize":"フレームサイズ（任意）:","form.ss.field.ffmpeg_framerate":"フレームレート（任意）:","form.ss.field.ffmpeg_bitrate":"ビットレート（任意）:","form.ss.field.ffmpeg_audiocodec":"音声コーデック（任意）:","form.ss.field.Audiostream_title":"タイトル（任意）:","form.user.title_create":"ユーザー作成","form.user.title_edit":"ユーザー編集","form.user.desc_create":"このページで新しいユーザーを作成します","form.user.lbl.username":"ユーザー名:","form.user.lbl.fullname":"フルネーム:","form.user.lbl.password":"パスワード:","form.user.lbl.roles":"認証ロール","form.user.msg.created":"ユーザーを作成しました","form.user.msg.changed":"ユーザーを変更しました"}
+  };
+  Object.keys(SP_EXTRA2).forEach(function(l){ if(SP_TRANS[l]) Object.assign(SP_TRANS[l], SP_EXTRA2[l]); });
   var t = localStorage.getItem('sp_theme') || 'default';
   if (t !== 'default') document.documentElement.setAttribute('data-theme', t);
   var _spLang = localStorage.getItem('sp_lang') || 'pt';
@@ -6145,6 +6156,10 @@ function CreateMenu(auth) {
     document.querySelectorAll('[data-i18n]').forEach(function(el){
       var k = el.getAttribute('data-i18n');
       if (tr[k]) el.textContent = tr[k];
+    });
+    document.querySelectorAll('[data-i18n-ph]').forEach(function(el){
+      var k = el.getAttribute('data-i18n-ph');
+      if (tr[k]) el.setAttribute('placeholder', tr[k]);
     });
     var path = window.location.pathname;
     document.querySelectorAll('.nav-item[href]').forEach(function(el){
