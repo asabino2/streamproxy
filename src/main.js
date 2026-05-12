@@ -1975,10 +1975,10 @@ app.get('/streamserver/list', (req, res) => {
                
                 if(response.status == 200){
                 
-                displayToast("green","StreamServer "+streamname+" has started");
+                displayToast("green",(typeof SP_T==='function'?SP_T('ss.msg.started').replace('%s',streamname):"StreamServer "+streamname+" has started"));
                }
                else{
-                displayToast("red","error HTTP "+response.status+" "+response.statusText);
+                displayToast("red",(typeof SP_T==='function'?SP_T('err.http'):'error HTTP')+" "+response.status+" "+response.statusText);
                }
                
                
@@ -2010,10 +2010,10 @@ app.get('/streamserver/list', (req, res) => {
                    
                     if(response.status == 200){
                     
-                    displayToast("green","StreamServer "+streamname+" has stopped");
+                    displayToast("green",(typeof SP_T==='function'?SP_T('ss.msg.stopped').replace('%s',streamname):"StreamServer "+streamname+" has stopped"));
                    }
                    else{
-                    displayToast("red","error HTTP "+response.status+" "+response.statusText);
+                    displayToast("red",(typeof SP_T==='function'?SP_T('err.http'):'error HTTP')+" "+response.status+" "+response.statusText);
                    }
                    
                    
@@ -2032,7 +2032,7 @@ app.get('/streamserver/list', (req, res) => {
          function deleteStreamServer(streamname){
     
             var statusData = undefined;
-            if(confirm('Are you sure you want to delete the stream server '+streamname+'?')){
+            if(confirm(typeof SP_T==='function'?SP_T('ss.confirm.delete').replace('%s',streamname):'Are you sure you want to delete the stream server '+streamname+'?')){
                 try{
                     ProcessHTML = fetch('/api/streamserver/'+streamname, {
                     headers: {
@@ -2045,10 +2045,10 @@ app.get('/streamserver/list', (req, res) => {
                        
                         if(response.status == 200){
                         
-                        displayToast("green","StreamServer "+streamname+" has deleted");
+                        displayToast("green",(typeof SP_T==='function'?SP_T('ss.msg.deleted').replace('%s',streamname):"StreamServer "+streamname+" has deleted"));
                        }
                        else{
-                        displayToast("red","error HTTP "+response.status+" "+response.statusText);
+                        displayToast("red",(typeof SP_T==='function'?SP_T('err.http'):'error HTTP')+" "+response.status+" "+response.statusText);
                        }
                        
                        
@@ -2139,16 +2139,16 @@ app.get('/streamserver/list', (req, res) => {
         htmlData += "<table>";
         htmlData += "<tr>";
         htmlData += "<th> </th>";
-        htmlData += "<th>Stream Name</th>";
-        htmlData += "<th>Channel Number</th>";
-        htmlData += "<th>Description</th>";
+        htmlData += "<th>"+(typeof SP_T==='function'?SP_T('ss.th.name'):'Stream Name')+"</th>";
+        htmlData += "<th>"+(typeof SP_T==='function'?SP_T('ss.th.channel'):'Channel Number')+"</th>";
+        htmlData += "<th>"+(typeof SP_T==='function'?SP_T('ss.th.desc'):'Description')+"</th>";
         htmlData += "<th>URL</th>";
-        htmlData += "<th>Type</th>";
-        htmlData += "<th>Endpoint</th>";
-        htmlData += "<th>Status</th>";
-        htmlData += "<th>Avg. Data Transfer</th>";
-        htmlData += "<th>Connections</th>";
-        htmlData += "<th>Command</th>";
+        htmlData += "<th>"+(typeof SP_T==='function'?SP_T('ss.th.type'):'Type')+"</th>";
+        htmlData += "<th>"+(typeof SP_T==='function'?SP_T('ss.th.endpoint'):'Endpoint')+"</th>";
+        htmlData += "<th>"+(typeof SP_T==='function'?SP_T('ss.th.status'):'Status')+"</th>";
+        htmlData += "<th>"+(typeof SP_T==='function'?SP_T('ss.th.transfer'):'Avg. Data Transfer')+"</th>";
+        htmlData += "<th>"+(typeof SP_T==='function'?SP_T('ss.th.connections'):'Connections')+"</th>";
+        htmlData += "<th>"+(typeof SP_T==='function'?SP_T('ss.th.command'):'Command')+"</th>";
         htmlData += "<th></th>";
         htmlData += "</tr>";
         
@@ -2170,17 +2170,17 @@ app.get('/streamserver/list', (req, res) => {
           htmlData += '<td id="'+table.streamname+':type">'+getStreamTypeIcon(table.type) + '</td>';
           htmlData += '<td id="'+table.streamname+':streammethod">'+table.streammethod+'</td>';
           if(table.status == "running"){
-            htmlData += '<td id="'+table.streamname+':status"> <div  class="label-status label-status-green">running</div></td>';
+            htmlData += '<td id="'+table.streamname+':status"> <div  class="label-status label-status-green">'+(typeof SP_T==='function'?SP_T('ss.status.running'):'running')+'</div></td>';
           } else {
-            htmlData += '<td id="'+table.streamname+':status"> <div  class="label-status label-status-red">stopped</div></td>';
+            htmlData += '<td id="'+table.streamname+':status"> <div  class="label-status label-status-red">'+(typeof SP_T==='function'?SP_T('ss.status.stopped'):'stopped')+'</div></td>';
           }
           htmlData += '<td id="'+table.streamname+':datasize">'+table.dataTransfered+'</td>';
           htmlData += '<td ><a href="/streamserver/status?streamname='+table.streamname+'"><div id="'+table.streamname+':connections">'+table.connections+'</div></a></td>';
           htmlData += '<td>'
-          htmlData += '<button onclick="startStreamServer('+streamname+')" id="'+table.streamname+':start" class="listbutton listbutton-green"><i class="fa fa-play space-right"></i> Start</button>  '
-          htmlData += '<button onclick="stopStreamServer('+streamname+')" id="'+table.streamname+':stop" class="listbutton listbutton-red"><i class="fa fa-stop space-right"></i> Stop</button>  '
-          htmlData += '<button onclick="editStreamServer('+streamname+')" id="'+table.streamname+':edit" class="listbutton listbutton-blue"><i class="fa fa-edit"></i> Edit</button>  '
-          htmlData += '<button onclick="deleteStreamServer('+streamname+')" id="'+table.streamname+':delete" class="listbutton listbutton-red"><i class="fa fa-trash-alt"></i> Delete</button>  '
+          htmlData += '<button onclick="startStreamServer('+streamname+')" id="'+table.streamname+':start" class="listbutton listbutton-green"><i class="fa fa-play space-right"></i> '+(typeof SP_T==='function'?SP_T('ss.btn.start'):'Start')+'</button>  '
+          htmlData += '<button onclick="stopStreamServer('+streamname+')" id="'+table.streamname+':stop" class="listbutton listbutton-red"><i class="fa fa-stop space-right"></i> '+(typeof SP_T==='function'?SP_T('ss.btn.stop'):'Stop')+'</button>  '
+          htmlData += '<button onclick="editStreamServer('+streamname+')" id="'+table.streamname+':edit" class="listbutton listbutton-blue"><i class="fa fa-edit"></i> '+(typeof SP_T==='function'?SP_T('ss.btn.edit'):'Edit')+'</button>  '
+          htmlData += '<button onclick="deleteStreamServer('+streamname+')" id="'+table.streamname+':delete" class="listbutton listbutton-red"><i class="fa fa-trash-alt"></i> '+(typeof SP_T==='function'?SP_T('ss.btn.delete'):'Delete')+'</button>  '
           htmlData += '</td>';
           htmlData += '</tr>';
          
@@ -2205,13 +2205,13 @@ app.get('/streamserver/list', (req, res) => {
            
             document.getElementById(table.streamname+":datasize").innerHTML = table.dataTransfered;
             if(table.status == "running"){
-                document.getElementById(table.streamname+":status").innerHTML = '<div  class="label-status label-status-green">running</div>';
+                document.getElementById(table.streamname+":status").innerHTML = '<div  class="label-status label-status-green">'+(typeof SP_T==='function'?SP_T('ss.status.running'):'running')+'</div>';
                 document.getElementById(table.streamname+":start").disabled = true;
                 document.getElementById(table.streamname+":edit").disabled = true;
                 document.getElementById(table.streamname+":delete").disabled = true;
                 document.getElementById(table.streamname+":stop").disabled = false;
               } else {
-                document.getElementById(table.streamname+":status").innerHTML = '<div  class="label-status label-status-red">stopped</div>';
+                document.getElementById(table.streamname+":status").innerHTML = '<div  class="label-status label-status-red">'+(typeof SP_T==='function'?SP_T('ss.status.stopped'):'stopped')+'</div>';
                 document.getElementById(table.streamname+":start").disabled = false;
                 document.getElementById(table.streamname+":edit").disabled = false;
                 document.getElementById(table.streamname+":delete").disabled = false;
@@ -2267,10 +2267,10 @@ app.get('/streamserver/list', (req, res) => {
     </head>
     <body onload="startTimer()">
     ${CreateMenu(auth)}
-    <button onclick="startStreamServer('*')"  class="listbutton listbutton-green" id="startAll"><i class="fa fa-play space-right"></i> Start All</button>  
-    <button onclick="stopStreamServer('*')" class="listbutton listbutton-red" id="stopAll"><i class="fa fa-stop space-right"></i> Stop All</button>    
-    <button onclick="addStreamServer()" class="listbutton listbutton-blue" id="addStreamServer"><i class="fa fa-plus"></i> Add Stream Server</button> 
-    <button onclick="downloadPlaylist()" class="listbutton listbutton-blue" id="downloadPlaylist"><i class="fa fa-list"></i> Download Playlist</button>
+    <button onclick="startStreamServer('*')"  class="listbutton listbutton-green" id="startAll"><i class="fa fa-play space-right"></i> <span data-i18n="ss.btn.start_all">Start All</span></button>  
+    <button onclick="stopStreamServer('*')" class="listbutton listbutton-red" id="stopAll"><i class="fa fa-stop space-right"></i> <span data-i18n="ss.btn.stop_all">Stop All</span></button>    
+    <button onclick="addStreamServer()" class="listbutton listbutton-blue" id="addStreamServer"><i class="fa fa-plus"></i> <span data-i18n="ss.btn.add_server">Add Stream Server</span></button> 
+    <button onclick="downloadPlaylist()" class="listbutton listbutton-blue" id="downloadPlaylist"><i class="fa fa-list"></i> <span data-i18n="ss.btn.playlist">Download Playlist</span></button>
     <div id="status"></div>
     <div id="snackbar"></div>`
     res.send(data);
@@ -2304,7 +2304,7 @@ app.get('/user/list', (req, res) => {
          function deleteUser(user){
     
             var statusData = undefined;
-            if(confirm('Are you sure you want to delete the user '+user+'?')){
+            if(confirm(typeof SP_T==='function'?SP_T('user.confirm.delete').replace('%s',user):'Are you sure you want to delete the user '+user+'?')){
                 try{
                     ProcessHTML = fetch('/api/users/'+user, {
                     headers: { 
@@ -2326,10 +2326,10 @@ app.get('/user/list', (req, res) => {
                        
                         if(response.status == 200){
                         
-                        displayToast("green","user "+user+" has deleted");
+                        displayToast("green",(typeof SP_T==='function'?SP_T('user.msg.deleted').replace('%s',user):"user "+user+" has deleted"));
                        }
                        else{
-                        displayToast("red","error HTTP "+response.status+" "+response.statusText);
+                        displayToast("red",(typeof SP_T==='function'?SP_T('err.http'):'error HTTP')+" "+response.status+" "+response.statusText);
                        }
                        
                        
@@ -2405,10 +2405,10 @@ app.get('/user/list', (req, res) => {
    
         htmlData += "<table>";
         htmlData += "<tr>";
-        htmlData += "<th width='40%'>username</th>";
-        htmlData += "<th width='50%'>Full Name</th>";
+        htmlData += "<th width='40%'>"+(typeof SP_T==='function'?SP_T('user.th.username'):'Username')+"</th>";
+        htmlData += "<th width='50%'>"+(typeof SP_T==='function'?SP_T('user.th.fullname'):'Full Name')+"</th>";
        
-        htmlData += "<th width='10%'>Command</th>";
+        htmlData += "<th width='10%'>"+(typeof SP_T==='function'?SP_T('user.th.command'):'Command')+"</th>";
         htmlData += "<th></th>";
         htmlData += "</tr>";
         
@@ -2423,11 +2423,11 @@ app.get('/user/list', (req, res) => {
           htmlData += '<td width="50%">'+table.fullname+'</td>';
          
           htmlData += '<td width="10%" >'
-          htmlData += '<button onclick="editUser('+username+')" id="'+table.username+':edit" class="listbutton listbutton-blue"><i class="fa fa-edit"></i> Edit</button>  '
+          htmlData += '<button onclick="editUser('+username+')" id="'+table.username+':edit" class="listbutton listbutton-blue"><i class="fa fa-edit"></i> '+(typeof SP_T==='function'?SP_T('ss.btn.edit'):'Edit')+'</button>  '
           if(table.username == "anonymous"){
-            htmlData += '<button onclick="deleteUser('+username+')" id="'+table.username+':delete" class="listbutton listbutton-red" disabled><i class="fa fa-trash-alt"></i> Delete</button>  '
+            htmlData += '<button onclick="deleteUser('+username+')" id="'+table.username+':delete" class="listbutton listbutton-red" disabled><i class="fa fa-trash-alt"></i> '+(typeof SP_T==='function'?SP_T('ss.btn.delete'):'Delete')+'</button>  '
           } else {
-            htmlData += '<button onclick="deleteUser('+username+')" id="'+table.username+':delete" class="listbutton listbutton-red"><i class="fa fa-trash-alt"></i> Delete</button>  '
+            htmlData += '<button onclick="deleteUser('+username+')" id="'+table.username+':delete" class="listbutton listbutton-red"><i class="fa fa-trash-alt"></i> '+(typeof SP_T==='function'?SP_T('ss.btn.delete'):'Delete')+'</button>  '
           }
           
           htmlData += '</td>';
@@ -2462,7 +2462,7 @@ function startTimer() {
     </head>
     <body onload="startTimer()">
     ${CreateMenu(auth)}
-    <button onclick="addUser()"  class="listbutton listbutton-blue" id="addStreamServer"><i class="fa fa-plus"></i> Add User</button>  
+    <button onclick="addUser()"  class="listbutton listbutton-blue" id="addStreamServer"><i class="fa fa-plus"></i> <span data-i18n="user.btn.add">Add User</span></button>  
     <div id="status"></div>
     <div id="snackbar"></div>`
     res.send(data);
@@ -6121,6 +6121,17 @@ function CreateMenu(auth) {
       "about.title":"について","about.desc":"複数の伝送方式をサポートするビデオ・オーディオストリームプロキシ。","about.author":"Alexander Sabino 開発","about.current_ver":"現在のバージョン","about.latest_ver":"最新バージョン","about.checking":"確認中...","about.changelog":"変更履歴","about.loading":"読み込み中...","about.up_to_date":"✅ 最新バージョンを使用しています。","about.new_version":"⬆️ 新しいバージョンが利用可能です:","about.releases":"リリースを見る","about.error":"エラー","about.unavailable":"利用不可","about.readme_fallback":"完全な変更履歴は GitHub の README.md をご覧ください。","about.readme_error":"変更履歴を読み込めませんでした。"
     }
   };
+  var SP_EXTRA = {
+    pt:{ "ss.btn.start_all":"Iniciar Todos","ss.btn.stop_all":"Parar Todos","ss.btn.add_server":"Adicionar Servidor","ss.btn.playlist":"Download Playlist","ss.th.name":"Nome do Stream","ss.th.channel":"Nº do Canal","ss.th.desc":"Descrição","ss.th.url":"URL","ss.th.type":"Tipo","ss.th.endpoint":"Endpoint","ss.th.status":"Status","ss.th.transfer":"Transferência Média","ss.th.connections":"Conexões","ss.th.command":"Ação","ss.status.running":"ativo","ss.status.stopped":"parado","ss.btn.start":"Iniciar","ss.btn.stop":"Parar","ss.btn.edit":"Editar","ss.btn.delete":"Excluir","ss.msg.started":"StreamServer %s iniciado","ss.msg.stopped":"StreamServer %s parado","ss.msg.deleted":"StreamServer %s excluído","ss.confirm.delete":"Tem certeza que deseja excluir o servidor %s?","user.btn.add":"Adicionar Usuário","user.th.username":"Usuário","user.th.fullname":"Nome Completo","user.th.command":"Ação","user.msg.deleted":"Usuário %s excluído","user.confirm.delete":"Tem certeza que deseja excluir o usuário %s?","err.http":"erro HTTP" },
+    en:{ "ss.btn.start_all":"Start All","ss.btn.stop_all":"Stop All","ss.btn.add_server":"Add Stream Server","ss.btn.playlist":"Download Playlist","ss.th.name":"Stream Name","ss.th.channel":"Channel Number","ss.th.desc":"Description","ss.th.url":"URL","ss.th.type":"Type","ss.th.endpoint":"Endpoint","ss.th.status":"Status","ss.th.transfer":"Avg. Data Transfer","ss.th.connections":"Connections","ss.th.command":"Command","ss.status.running":"running","ss.status.stopped":"stopped","ss.btn.start":"Start","ss.btn.stop":"Stop","ss.btn.edit":"Edit","ss.btn.delete":"Delete","ss.msg.started":"StreamServer %s has started","ss.msg.stopped":"StreamServer %s has stopped","ss.msg.deleted":"StreamServer %s has deleted","ss.confirm.delete":"Are you sure you want to delete the stream server %s?","user.btn.add":"Add User","user.th.username":"Username","user.th.fullname":"Full Name","user.th.command":"Command","user.msg.deleted":"user %s has deleted","user.confirm.delete":"Are you sure you want to delete the user %s?","err.http":"error HTTP" },
+    es:{ "ss.btn.start_all":"Iniciar Todos","ss.btn.stop_all":"Detener Todos","ss.btn.add_server":"Agregar Servidor","ss.btn.playlist":"Descargar Lista","ss.th.name":"Nombre del Stream","ss.th.channel":"Nº de Canal","ss.th.desc":"Descripción","ss.th.url":"URL","ss.th.type":"Tipo","ss.th.endpoint":"Endpoint","ss.th.status":"Estado","ss.th.transfer":"Transferencia Media","ss.th.connections":"Conexiones","ss.th.command":"Acción","ss.status.running":"activo","ss.status.stopped":"detenido","ss.btn.start":"Iniciar","ss.btn.stop":"Detener","ss.btn.edit":"Editar","ss.btn.delete":"Eliminar","ss.msg.started":"StreamServer %s iniciado","ss.msg.stopped":"StreamServer %s detenido","ss.msg.deleted":"StreamServer %s eliminado","ss.confirm.delete":"¿Seguro que deseas eliminar el servidor %s?","user.btn.add":"Agregar Usuario","user.th.username":"Usuario","user.th.fullname":"Nombre Completo","user.th.command":"Acción","user.msg.deleted":"Usuario %s eliminado","user.confirm.delete":"¿Seguro que deseas eliminar el usuario %s?","err.http":"error HTTP" },
+    de:{ "ss.btn.start_all":"Alle starten","ss.btn.stop_all":"Alle stoppen","ss.btn.add_server":"Server hinzufügen","ss.btn.playlist":"Playlist herunterladen","ss.th.name":"Stream-Name","ss.th.channel":"Kanal-Nr.","ss.th.desc":"Beschreibung","ss.th.url":"URL","ss.th.type":"Typ","ss.th.endpoint":"Endpunkt","ss.th.status":"Status","ss.th.transfer":"Ø Datenübertragung","ss.th.connections":"Verbindungen","ss.th.command":"Aktion","ss.status.running":"aktiv","ss.status.stopped":"gestoppt","ss.btn.start":"Starten","ss.btn.stop":"Stoppen","ss.btn.edit":"Bearbeiten","ss.btn.delete":"Löschen","ss.msg.started":"StreamServer %s gestartet","ss.msg.stopped":"StreamServer %s gestoppt","ss.msg.deleted":"StreamServer %s gelöscht","ss.confirm.delete":"StreamServer %s wirklich löschen?","user.btn.add":"Benutzer hinzufügen","user.th.username":"Benutzername","user.th.fullname":"Vollständiger Name","user.th.command":"Aktion","user.msg.deleted":"Benutzer %s gelöscht","user.confirm.delete":"Benutzer %s wirklich löschen?","err.http":"HTTP-Fehler" },
+    it:{ "ss.btn.start_all":"Avvia tutti","ss.btn.stop_all":"Ferma tutti","ss.btn.add_server":"Aggiungi Server","ss.btn.playlist":"Scarica Playlist","ss.th.name":"Nome Stream","ss.th.channel":"N. Canale","ss.th.desc":"Descrizione","ss.th.url":"URL","ss.th.type":"Tipo","ss.th.endpoint":"Endpoint","ss.th.status":"Stato","ss.th.transfer":"Trasf. Media","ss.th.connections":"Connessioni","ss.th.command":"Azione","ss.status.running":"attivo","ss.status.stopped":"fermo","ss.btn.start":"Avvia","ss.btn.stop":"Ferma","ss.btn.edit":"Modifica","ss.btn.delete":"Elimina","ss.msg.started":"StreamServer %s avviato","ss.msg.stopped":"StreamServer %s fermato","ss.msg.deleted":"StreamServer %s eliminato","ss.confirm.delete":"Eliminare il server %s?","user.btn.add":"Aggiungi Utente","user.th.username":"Nome utente","user.th.fullname":"Nome completo","user.th.command":"Azione","user.msg.deleted":"Utente %s eliminato","user.confirm.delete":"Eliminare l'utente %s?","err.http":"errore HTTP" },
+    ru:{ "ss.btn.start_all":"Запустить всё","ss.btn.stop_all":"Остановить всё","ss.btn.add_server":"Добавить сервер","ss.btn.playlist":"Скачать плейлист","ss.th.name":"Имя потока","ss.th.channel":"№ канала","ss.th.desc":"Описание","ss.th.url":"URL","ss.th.type":"Тип","ss.th.endpoint":"Эндпойнт","ss.th.status":"Статус","ss.th.transfer":"Ср. передача","ss.th.connections":"Подключения","ss.th.command":"Действие","ss.status.running":"активен","ss.status.stopped":"остановлен","ss.btn.start":"Запуск","ss.btn.stop":"Стоп","ss.btn.edit":"Изменить","ss.btn.delete":"Удалить","ss.msg.started":"StreamServer %s запущен","ss.msg.stopped":"StreamServer %s остановлен","ss.msg.deleted":"StreamServer %s удалён","ss.confirm.delete":"Удалить сервер %s?","user.btn.add":"Добавить пользователя","user.th.username":"Имя пользователя","user.th.fullname":"Полное имя","user.th.command":"Действие","user.msg.deleted":"Пользователь %s удалён","user.confirm.delete":"Удалить пользователя %s?","err.http":"ошибка HTTP" },
+    zh:{ "ss.btn.start_all":"全部启动","ss.btn.stop_all":"全部停止","ss.btn.add_server":"添加流服务器","ss.btn.playlist":"下载播放列表","ss.th.name":"流名称","ss.th.channel":"频道号","ss.th.desc":"描述","ss.th.url":"URL","ss.th.type":"类型","ss.th.endpoint":"端点","ss.th.status":"状态","ss.th.transfer":"平均数据传输","ss.th.connections":"连接数","ss.th.command":"操作","ss.status.running":"运行中","ss.status.stopped":"已停止","ss.btn.start":"启动","ss.btn.stop":"停止","ss.btn.edit":"编辑","ss.btn.delete":"删除","ss.msg.started":"StreamServer %s 已启动","ss.msg.stopped":"StreamServer %s 已停止","ss.msg.deleted":"StreamServer %s 已删除","ss.confirm.delete":"确定删除流服务器 %s？","user.btn.add":"添加用户","user.th.username":"用户名","user.th.fullname":"全名","user.th.command":"操作","user.msg.deleted":"用户 %s 已删除","user.confirm.delete":"确定删除用户 %s？","err.http":"HTTP 错误" },
+    ja:{ "ss.btn.start_all":"すべて開始","ss.btn.stop_all":"すべて停止","ss.btn.add_server":"サーバーを追加","ss.btn.playlist":"プレイリストをDL","ss.th.name":"ストリーム名","ss.th.channel":"チャンネル番号","ss.th.desc":"説明","ss.th.url":"URL","ss.th.type":"タイプ","ss.th.endpoint":"エンドポイント","ss.th.status":"ステータス","ss.th.transfer":"平均データ転送","ss.th.connections":"接続数","ss.th.command":"操作","ss.status.running":"実行中","ss.status.stopped":"停止","ss.btn.start":"開始","ss.btn.stop":"停止","ss.btn.edit":"編集","ss.btn.delete":"削除","ss.msg.started":"StreamServer %s を開始しました","ss.msg.stopped":"StreamServer %s を停止しました","ss.msg.deleted":"StreamServer %s を削除しました","ss.confirm.delete":"ストリームサーバー %s を削除しますか？","user.btn.add":"ユーザーを追加","user.th.username":"ユーザー名","user.th.fullname":"フルネーム","user.th.command":"操作","user.msg.deleted":"ユーザー %s を削除しました","user.confirm.delete":"ユーザー %s を削除しますか？","err.http":"HTTP エラー" }
+  };
+  Object.keys(SP_EXTRA).forEach(function(l){ if(SP_TRANS[l]) Object.assign(SP_TRANS[l], SP_EXTRA[l]); });
   var t = localStorage.getItem('sp_theme') || 'default';
   if (t !== 'default') document.documentElement.setAttribute('data-theme', t);
   var _spLang = localStorage.getItem('sp_lang') || 'pt';
