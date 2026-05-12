@@ -2598,6 +2598,7 @@ app.get('/settings', (req, res) => {
     var cfgStartOnInvoke = (config.streamserver && config.streamserver.startOnInvoke) ? 'checked' : '';
     var cfgHideStopped = (config.streamserver && config.streamserver.hideStoppedStreamServerInPlaylist) ? 'checked' : '';
     var cfgStopOnNoConn = (config.streamserver && config.streamserver.stopOnNoConnection) ? 'checked' : '';
+    var authHeader = req.headers.authorization || '';
     var html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -2667,8 +2668,7 @@ app.get('/settings', (req, res) => {
       };
       fetch('/api/config', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Basic ' + btoa(document.cookie.split('auth=')[1] || '') },
-        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'Authorization': '${authHeader}' },
         body: JSON.stringify(payload)
       }).then(function(r){ return r.json(); }).then(function(){
         var msg = (typeof SP_T === 'function') ? SP_T('settings.saved') : 'Settings saved! Reloading...';
