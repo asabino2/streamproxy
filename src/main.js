@@ -648,6 +648,7 @@ app.get('/streamserver/status', (req, res) => {
             </script>   
             </head>
             <body onload="startTimer()">
+            ${CreateMenu(auth)}
             <div id="status"></div>
             
             `
@@ -2537,15 +2538,223 @@ app.get('/status/*', (req, res) => {
 })
 
 
+app.get('/settings', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+    var menu = CreateMenu(auth);
+    var html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StreamProxy - Configurações</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/toast.css">
+  <script>
+    ${commonFrontendFunctionsGet()}
+    var SP_LANGUAGES = [
+      {code:'pt', label:'Português (Brasil)'},
+      {code:'en', label:'English'},
+      {code:'es', label:'Español'},
+      {code:'de', label:'Deutsch'},
+      {code:'it', label:'Italiano'},
+      {code:'ru', label:'Русский'},
+      {code:'zh', label:'中文'},
+      {code:'ja', label:'日本語'}
+    ];
+    var SP_THEMES = [
+      {value:'default', label:'Padrão (Azul)'},
+      {value:'dark', label:'Escuro'},
+      {value:'sunrise', label:'Amanhecer'},
+      {value:'forest', label:'Floresta'},
+      {value:'ocean', label:'Oceano'},
+      {value:'purple', label:'Púrpura'},
+      {value:'rose', label:'Rosa'},
+      {value:'orange', label:'Laranja'},
+      {value:'graphite', label:'Grafite'},
+      {value:'sapphire', label:'Safira'},
+      {value:'contrast', label:'Alto Contraste'}
+    ];
+    function initSettings() {
+      var langSel = document.getElementById('settingsLanguage');
+      SP_LANGUAGES.forEach(function(l){
+        var opt = document.createElement('option');
+        opt.value = l.code; opt.textContent = l.label;
+        langSel.appendChild(opt);
+      });
+      langSel.value = localStorage.getItem('sp_lang') || 'pt';
+      var themeSel = document.getElementById('settingsTheme');
+      SP_THEMES.forEach(function(t){
+        var opt = document.createElement('option');
+        opt.value = t.value; opt.textContent = t.label;
+        themeSel.appendChild(opt);
+      });
+      themeSel.value = localStorage.getItem('sp_theme') || 'default';
+    }
+    function applyLang(lang) {
+      localStorage.setItem('sp_lang', lang);
+    }
+    function applyTheme(theme) {
+      localStorage.setItem('sp_theme', theme);
+      if (theme === 'default') {
+        document.documentElement.removeAttribute('data-theme');
+      } else {
+        document.documentElement.setAttribute('data-theme', theme);
+      }
+    }
+    function saveSettings() {
+      var lang = document.getElementById('settingsLanguage').value;
+      var theme = document.getElementById('settingsTheme').value;
+      applyLang(lang);
+      applyTheme(theme);
+      displayToast('green', 'Configurações salvas! Recarregando...');
+      setTimeout(function(){ location.reload(); }, 1200);
+    }
+  </script>
+</head>
+<body onload="initSettings()">
+  ${menu}
+  <div class="settings-page">
+    <h1>Configurações</h1>
+    <div class="settings-card">
+      <div class="settings-section">
+        <h2>Idioma</h2>
+        <p>Selecione o idioma de toda a interface</p>
+        <select id="settingsLanguage" class="settings-select"></select>
+      </div>
+      <div class="settings-section">
+        <h2>Tema</h2>
+        <p>Personalize a aparência da interface</p>
+        <select id="settingsTheme" class="settings-select"></select>
+      </div>
+      <div>
+        <button onclick="saveSettings()" class="btn btn--primary">Salvar configurações</button>
+      </div>
+    </div>
+  </div>
+  <div id="snackbar"></div>
+</body>
+</html>`;
+    res.send(html);
+});
+
+
 app.get('/about', (req, res) => {
     var auth = basicAuth(req, res);
     if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
 
+    var isAdmin = false;
+    if (auth.user && auth.user !== 'anonymous') {
+        var u = users.find(function(x){ return x.username === auth.user; });
+        if (u && u.authorizations && u.authorizations.administrator === true) {
+            isAdmin = true;
+        }
+    }
+
     res.set({ 'Server': 'streamproxy' });
-    res.redirect("/");
+    var menu = CreateMenu(auth);
+    var html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StreamProxy - Sobre</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/toast.css">
+  <script>
+    ${commonFrontendFunctionsGet()}
+    var CURRENT_VERSION = '${pjson.version}';
+    var IS_ADMIN = ${isAdmin};
+    function loadAboutData() {
+      document.getElementById('aboutCurrentVersion').textContent = CURRENT_VERSION;
+      var x = new XMLHttpRequest();
+      x.open('GET', 'https://raw.githubusercontent.com/asabino2/streamproxy/master/package.json');
+      x.onload = function() {
+        try {
+          var data = JSON.parse(x.responseText);
+          var latest = data.version || '?';
+          document.getElementById('aboutLatestVersion').textContent = latest;
+          var wrap = document.getElementById('aboutUpdateWrap');
+          var btn = document.getElementById('aboutUpdateBtn');
+          var status = document.getElementById('aboutUpdateStatus');
+          wrap.style.display = 'flex';
+          if (latest === CURRENT_VERSION) {
+            status.textContent = '✅ Você está na versão mais recente.';
+          } else {
+            status.textContent = '⬆️ Nova versão disponível: ' + latest;
+            if (IS_ADMIN && btn) { btn.classList.remove('hidden'); }
+          }
+        } catch(e) {
+          document.getElementById('aboutLatestVersion').textContent = 'Erro';
+        }
+      };
+      x.onerror = function() { document.getElementById('aboutLatestVersion').textContent = 'Indisponível'; };
+      x.send();
+      loadChangelog();
+    }
+    function loadChangelog() {
+      var cx = new XMLHttpRequest();
+      cx.open('GET', 'https://raw.githubusercontent.com/asabino2/streamproxy/master/README.md');
+      cx.onload = function() {
+        var md = cx.responseText;
+        var lines = md.split('\\n');
+        var html = '';
+        var inList = false;
+        for (var i = 0; i < lines.length && i < 60; i++) {
+          var line = lines[i];
+          if (line.startsWith('### ')) { if(inList){html+='</ul>';inList=false;} html += '<h4>' + line.substring(4) + '</h4>'; }
+          else if (line.startsWith('## ')) { if(inList){html+='</ul>';inList=false;} break; }
+          else if (line.startsWith('- ')) { if(!inList){html+='<ul>';inList=true;} html += '<li>' + line.substring(2) + '</li>'; }
+        }
+        if(inList) html += '</ul>';
+        document.getElementById('aboutChangelog').innerHTML = html || '<p>Veja o README.md no GitHub para o changelog completo.</p>';
+      };
+      cx.onerror = function(){ document.getElementById('aboutChangelog').innerHTML = '<p>Não foi possível carregar o changelog.</p>'; };
+      cx.send();
+    }
+  </script>
+</head>
+<body onload="loadAboutData()">
+  ${menu}
+  <div class="about-page">
+    <h1>Sobre</h1>
+    <div class="about-card">
+      <div class="about-logo-wrap">
+        <img src="/streamproxy_app_icon.png" class="about-logo" alt="StreamProxy"/>
+        <h2>StreamProxy</h2>
+      </div>
+      <p class="about-description">Proxy e servidor de streams de vídeo e áudio com suporte a múltiplos métodos de transmissão.</p>
+      <p class="about-author">Desenvolvido por Alexander Sabino</p>
+      <div class="about-version-grid">
+        <div class="about-version-item">
+          <span class="about-version-label">Versão atual</span>
+          <strong id="aboutCurrentVersion">—</strong>
+        </div>
+        <div class="about-version-item">
+          <span class="about-version-label">Última versão</span>
+          <strong id="aboutLatestVersion">Verificando...</strong>
+        </div>
+      </div>
+      <div id="aboutUpdateWrap" class="about-update-wrap" style="display:none">
+        <span id="aboutUpdateStatus" class="about-update-status"></span>
+        ${isAdmin ? '<a href="https://github.com/asabino2/streamproxy/releases" target="_blank" id="aboutUpdateBtn" class="btn btn--primary hidden">Ver lançamentos</a>' : ''}
+      </div>
+      <div class="about-changelog">
+        <h3>Últimas alterações</h3>
+        <div id="aboutChangelog"><p style="font-style:italic;color:var(--text-muted)">Carregando...</p></div>
+      </div>
+    </div>
+  </div>
+  <div id="snackbar"></div>
+</body>
+</html>`;
+    res.send(html);
 });
+
 
 // help page, captured from github pages
 app.get('/', async function(req, res) {
@@ -2630,270 +2839,287 @@ app.get('/docs/api', (req, res) => {
     res.send(html);
 });
 
+app.get('/streamproxy_app_icon.png', (req, res) => {
+    const path = require('path');
+    const fs = require('fs');
+    const iconPath = path.join(__dirname, '..', 'streamproxy_app_icon.png');
+    if (fs.existsSync(iconPath)) {
+        res.setHeader('Content-Type', 'image/png');
+        res.sendFile(iconPath);
+    } else {
+        res.status(404).send('');
+    }
+});
+
 app.get('/styles.css', (req, res) => {
     var data = "";
-    var menuStyle = CreateMenuStyle();
+    res.setHeader('Content-Type', 'text/css');
     data = `
-    :root {
-        --primary-color: #007bff;
-        --secondary-color: #6c757d;
-        --success-color: #28a745;
-        --danger-color: #dc3545;
-        --light-color: #f8f9fa;
-        --dark-color: #343a40;
-        --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* === CSS Variables & Themes === */
+:root {
+  --sidebar-w: 220px;
+  --sidebar-bg: #1a1a2e;
+  --sidebar-text: #a0aec0;
+  --sidebar-text-active: #ffffff;
+  --sidebar-active-bg: rgba(255,255,255,0.08);
+  --sidebar-hover-bg: rgba(255,255,255,0.05);
+  --sidebar-accent: #4299e1;
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --border: #e2e8f0;
+  --text: #1a202c;
+  --text-muted: #718096;
+  --text-sm: #4a5568;
+  --accent: #3182ce;
+  --accent-hover: #2b6cb0;
+  --danger: #e53e3e;
+  --success: #38a169;
+  --warning: #d69e2e;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  /* legacy compat */
+  --primary-color: #007bff;
+  --secondary-color: #6c757d;
+  --success-color: #28a745;
+  --danger-color: #dc3545;
+  --light-color: #f8f9fa;
+  --dark-color: #343a40;
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+[data-theme="dark"] {
+  --sidebar-bg: #0a0a14; --sidebar-text: #8892a4; --sidebar-text-active: #e2e8f0;
+  --sidebar-active-bg: rgba(255,255,255,0.1); --sidebar-hover-bg: rgba(255,255,255,0.06);
+  --sidebar-accent: #60a5fa; --bg: #0f172a; --surface: #1e293b; --border: #334155;
+  --text: #e2e8f0; --text-muted: #94a3b8; --text-sm: #cbd5e1; --accent: #60a5fa; --accent-hover: #3b82f6;
+}
+[data-theme="sunrise"] {
+  --sidebar-bg: #7c2d12; --sidebar-text: #fed7aa; --sidebar-text-active: #fff7ed;
+  --sidebar-active-bg: rgba(255,255,255,0.12); --sidebar-hover-bg: rgba(255,255,255,0.07);
+  --sidebar-accent: #fb923c; --bg: #fff7ed; --surface: #ffffff; --border: #fed7aa;
+  --text: #431407; --text-muted: #9a3412; --text-sm: #7c2d12; --accent: #ea580c; --accent-hover: #c2410c;
+}
+[data-theme="forest"] {
+  --sidebar-bg: #14532d; --sidebar-text: #bbf7d0; --sidebar-text-active: #f0fdf4;
+  --sidebar-active-bg: rgba(255,255,255,0.1); --sidebar-hover-bg: rgba(255,255,255,0.06);
+  --sidebar-accent: #4ade80; --bg: #f0fdf4; --surface: #ffffff; --border: #bbf7d0;
+  --text: #14532d; --text-muted: #166534; --text-sm: #15803d; --accent: #16a34a; --accent-hover: #15803d;
+}
+[data-theme="ocean"] {
+  --sidebar-bg: #164e63; --sidebar-text: #a5f3fc; --sidebar-text-active: #ecfeff;
+  --sidebar-active-bg: rgba(255,255,255,0.1); --sidebar-hover-bg: rgba(255,255,255,0.06);
+  --sidebar-accent: #22d3ee; --bg: #ecfeff; --surface: #ffffff; --border: #a5f3fc;
+  --text: #164e63; --text-muted: #0e7490; --text-sm: #0891b2; --accent: #0891b2; --accent-hover: #0e7490;
+}
+[data-theme="purple"] {
+  --sidebar-bg: #3b0764; --sidebar-text: #e9d5ff; --sidebar-text-active: #faf5ff;
+  --sidebar-active-bg: rgba(255,255,255,0.1); --sidebar-hover-bg: rgba(255,255,255,0.06);
+  --sidebar-accent: #c084fc; --bg: #faf5ff; --surface: #ffffff; --border: #e9d5ff;
+  --text: #3b0764; --text-muted: #7e22ce; --text-sm: #6b21a8; --accent: #9333ea; --accent-hover: #7e22ce;
+}
+[data-theme="rose"] {
+  --sidebar-bg: #881337; --sidebar-text: #fecdd3; --sidebar-text-active: #fff1f2;
+  --sidebar-active-bg: rgba(255,255,255,0.1); --sidebar-hover-bg: rgba(255,255,255,0.06);
+  --sidebar-accent: #fb7185; --bg: #fff1f2; --surface: #ffffff; --border: #fecdd3;
+  --text: #881337; --text-muted: #be123c; --text-sm: #9f1239; --accent: #e11d48; --accent-hover: #be123c;
+}
+[data-theme="orange"] {
+  --sidebar-bg: #431407; --sidebar-text: #fed7aa; --sidebar-text-active: #fff7ed;
+  --sidebar-active-bg: rgba(255,255,255,0.1); --sidebar-hover-bg: rgba(255,255,255,0.06);
+  --sidebar-accent: #fb923c; --bg: #fff7ed; --surface: #ffffff; --border: #fed7aa;
+  --text: #1c1917; --text-muted: #78350f; --text-sm: #92400e; --accent: #f97316; --accent-hover: #ea580c;
+}
+[data-theme="graphite"] {
+  --sidebar-bg: #111827; --sidebar-text: #9ca3af; --sidebar-text-active: #f9fafb;
+  --sidebar-active-bg: rgba(255,255,255,0.08); --sidebar-hover-bg: rgba(255,255,255,0.04);
+  --sidebar-accent: #9ca3af; --bg: #f3f4f6; --surface: #ffffff; --border: #d1d5db;
+  --text: #111827; --text-muted: #6b7280; --text-sm: #374151; --accent: #374151; --accent-hover: #1f2937;
+}
+[data-theme="sapphire"] {
+  --sidebar-bg: #1e1b4b; --sidebar-text: #c7d2fe; --sidebar-text-active: #eef2ff;
+  --sidebar-active-bg: rgba(255,255,255,0.1); --sidebar-hover-bg: rgba(255,255,255,0.06);
+  --sidebar-accent: #818cf8; --bg: #eef2ff; --surface: #ffffff; --border: #c7d2fe;
+  --text: #1e1b4b; --text-muted: #4338ca; --text-sm: #3730a3; --accent: #4f46e5; --accent-hover: #4338ca;
+}
+[data-theme="contrast"] {
+  --sidebar-bg: #000000; --sidebar-text: #e5e5e5; --sidebar-text-active: #ffff00;
+  --sidebar-active-bg: rgba(255,255,0,0.15); --sidebar-hover-bg: rgba(255,255,255,0.08);
+  --sidebar-accent: #ffff00; --bg: #ffffff; --surface: #ffffff; --border: #000000;
+  --text: #000000; --text-muted: #333333; --text-sm: #1a1a1a; --accent: #0000cc; --accent-hover: #000099;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-family);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  background-color: var(--bg);
+  margin-left: var(--sidebar-w);
+  padding: 20px;
     }
 
-    body {
-        font-family: var(--font-family);
-        line-height: 1.6;
-        color: #333;
-        background-color: #f4f4f9;
-        margin: 0;
-        padding: 20px;
-    }
+    h1, h2, h3, h4, h5, h6 { color: var(--text); margin-bottom: 1rem; }
 
-    h1, h2, h3, h4, h5, h6 {
-        color: var(--dark-color);
-        margin-bottom: 1rem;
-    }
+    a { color: var(--accent); text-decoration: none; transition: color 0.3s ease; }
+    a:hover { color: var(--accent-hover); text-decoration: underline; }
 
-    a {
-        color: var(--primary-color);
-        text-decoration: none;
-        transition: color 0.3s ease;
-    }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; background-color: var(--surface);
+        box-shadow: var(--shadow-sm); border-radius: var(--radius-md); overflow: hidden; }
+    th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { background-color: var(--dark-color); color: #fff; font-weight: 600; text-transform: uppercase; font-size: 0.85rem; }
+    tr:hover { background-color: rgba(0,0,0,0.02); }
 
-    a:hover {
-        color: #0056b3;
-        text-decoration: underline;
-    }
-
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-bottom: 1rem;
-        background-color: #fff;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        border-radius: 8px;
-        overflow: hidden;
-    }
-
-    th, td {
-        padding: 12px 15px;
-        text-align: left;
-        border-bottom: 1px solid #e9ecef;
-    }
-
-    th {
-        background-color: var(--dark-color);
-        color: #fff;
-        font-weight: 600;
-        text-transform: uppercase;
-        font-size: 0.85rem;
-    }
-
-    tr:hover {
-        background-color: #f1f1f1;
-    }
-
-    /* Buttons */
-    button, .button {
-        display: inline-block;
-        font-weight: 400;
-        text-align: center;
-        white-space: nowrap;
-        vertical-align: middle;
-        user-select: none;
-        border: 1px solid transparent;
-        padding: 0.375rem 0.75rem;
-        font-size: 1rem;
-        line-height: 1.5;
-        border-radius: 0.25rem;
+    button, .button { display: inline-block; font-weight: 400; text-align: center; white-space: nowrap;
+        vertical-align: middle; user-select: none; border: 1px solid transparent; padding: 0.375rem 0.75rem;
+        font-size: 1rem; line-height: 1.5; border-radius: 0.25rem;
         transition: color 0.15s, background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
-        cursor: pointer;
-        background-color: var(--primary-color);
-        color: white;
-    }
+        cursor: pointer; background-color: var(--primary-color); color: white; }
+    button:hover, .button:hover { background-color: #0056b3; text-decoration: none; }
+    #killbutton { background-color: var(--danger-color); }
+    #killbutton:hover { background-color: #c82333; }
 
-    button:hover, .button:hover {
-        background-color: #0056b3;
-        text-decoration: none;
-    }
+    input[type="text"], input[type="password"], select, textarea { display: block; width: 100%;
+        padding: 0.375rem 0.75rem; font-size: 1rem; line-height: 1.5; color: var(--text);
+        background-color: var(--surface); background-clip: padding-box; border: 1px solid var(--border);
+        border-radius: 0.25rem; transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        box-sizing: border-box; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); outline: 0;
+        box-shadow: 0 0 0 0.2rem rgba(49,130,206,0.25); }
+    @media screen and (max-width: 600px) { table { display: block; overflow-x: auto; white-space: nowrap; } }
 
-    #killbutton {
-        background-color: var(--danger-color);
+    /* === Sidebar === */
+    .sidebar {
+      position: fixed; top: 0; left: 0; width: var(--sidebar-w); height: 100vh;
+      background: var(--sidebar-bg); display: flex; flex-direction: column;
+      overflow-y: auto; z-index: 100;
     }
-
-    #killbutton:hover {
-        background-color: #c82333;
+    .sidebar-brand {
+      display: flex; align-items: center; gap: 10px; padding: 20px 18px 16px;
+      color: var(--sidebar-text-active); font-size: 16px; font-weight: 700; letter-spacing: -0.01em;
+      border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0;
     }
-
-    /* Forms */
-    input[type="text"], input[type="password"], select, textarea {
-        display: block;
-        width: 100%;
-        padding: 0.375rem 0.75rem;
-        font-size: 1rem;
-        line-height: 1.5;
-        color: #495057;
-        background-color: #fff;
-        background-clip: padding-box;
-        border: 1px solid #ced4da;
-        border-radius: 0.25rem;
-        transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-        box-sizing: border-box;
+    .brand-icon { width: 32px; height: 32px; border-radius: 8px; object-fit: contain; flex-shrink: 0; }
+    .nav-list { list-style: none; padding: 8px 0; flex: 1; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 18px;
+      background: transparent; border: none; cursor: pointer; color: var(--sidebar-text);
+      font-size: 13.5px; font-weight: 500; border-radius: 0; border-left: 3px solid transparent;
+      transition: background 150ms, color 150ms; text-decoration: none; text-align: left;
     }
-
-    input:focus, select:focus, textarea:focus {
-        border-color: #80bdff;
-        outline: 0;
-        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .nav-item:hover { background: var(--sidebar-hover-bg); color: var(--sidebar-text-active); text-decoration: none; }
+    .nav-item.active { background: var(--sidebar-active-bg); color: var(--sidebar-text-active);
+      border-left-color: var(--sidebar-accent); padding-left: 15px; }
+    .sidebar-footer {
+      margin-top: auto; padding: 12px 16px 16px; border-top: 1px solid rgba(255,255,255,0.07); flex-shrink: 0;
     }
-
-    /* Responsive Table */
-    @media screen and (max-width: 600px) {
-        table {
-            display: block;
-            overflow-x: auto;
-            white-space: nowrap;
-        }
+    .sidebar-username {
+      font-size: 12px; color: var(--sidebar-text); padding: 4px 0 8px; text-align: center;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
+    .sidebar-logout { width: 100%; justify-content: center; color: var(--sidebar-text);
+      background: transparent; border: 1px solid rgba(255,255,255,0.15); border-radius: var(--radius-sm);
+      padding: 7px 12px; font-size: 13px; cursor: pointer; display: block; text-align: center;
+      transition: background 150ms, color 150ms; text-decoration: none; }
+    .sidebar-logout:hover { color: #fff; background: rgba(255,255,255,0.1); text-decoration: none; }
 
-    /* Menu */
-    .menu {
-        background-color: #fff;
-        padding: 10px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        margin-bottom: 20px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
+    /* === New utility button classes === */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+      border-radius: var(--radius-sm); border: none; cursor: pointer; font-size: 13.5px;
+      font-weight: 500; transition: opacity 150ms, background 150ms, transform 120ms; white-space: nowrap; }
+    .btn:disabled { opacity: 0.55; cursor: wait; }
+    .btn:not(:disabled):hover { opacity: 0.88; }
+    .btn:not(:disabled):active { transform: scale(0.97); }
+    .btn--primary { background: var(--accent); color: #fff; }
+    .btn--primary:not(:disabled):hover { background: var(--accent-hover); opacity: 1; }
+    .btn--secondary { background: #edf2f7; color: var(--text-sm); }
+    .btn--ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+    .btn--danger { background: #fff0f0; color: var(--danger); border: 1px solid #fecaca; }
+    .btn--sm { padding: 5px 11px; font-size: 12.5px; }
+
+    /* === Settings page === */
+    .settings-card { max-width: 640px; display: flex; flex-direction: column; gap: 28px; }
+    .settings-section { display: flex; flex-direction: column; gap: 10px; }
+    .settings-section h2 { font-size: 1rem; font-weight: 600; color: var(--text); }
+    .settings-section p { font-size: 0.85rem; color: var(--text-muted); }
+    .settings-select {
+      padding: 8px 12px; padding-right: 32px; border: 1px solid var(--border); border-radius: 8px;
+      font-size: 0.875rem; font-family: inherit; background: var(--surface); color: var(--text);
+      cursor: pointer; max-width: 280px; appearance: none; -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23718096' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center; transition: border-color 150ms;
     }
+    .settings-select:focus { outline: none; border-color: var(--accent); }
+    .settings-page { padding: 20px 0; }
+    .settings-page h1 { margin-bottom: 24px; color: var(--text); font-size: 22px; }
 
-    .menu a {
-        padding: 8px 12px;
-        border-radius: 4px;
-        background-color: var(--light-color);
-        color: var(--dark-color);
-        font-weight: 500;
-    }
+    /* === About page === */
+    .about-card { max-width: 600px; display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
+    .about-logo-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .about-logo { width: 80px; height: 80px; object-fit: contain; border-radius: 16px; }
+    .about-logo-wrap h2 { font-size: 1.4rem; font-weight: 700; color: var(--text); }
+    .about-description { font-size: 0.9rem; color: var(--text-muted); max-width: 480px; line-height: 1.6; }
+    .about-version-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 100%; max-width: 380px; }
+    .about-version-item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 10px; }
+    .about-version-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .03em; }
+    .about-version-item strong { font-size: 1.1rem; color: var(--text); }
+    .about-update-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+    .about-update-status { font-size: 0.875rem; color: var(--text-muted); }
+    .about-changelog { width: 100%; text-align: left; border-top: 1px solid var(--border); padding-top: 16px; }
+    .about-changelog h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 12px; color: var(--text); }
+    .about-author { margin-top: 1.5rem; font-size: 0.82rem; color: var(--text-muted); text-align: center; }
+    .about-page { padding: 20px 0; }
+    .about-page h1 { margin-bottom: 24px; color: var(--text); font-size: 22px; }
+    .hidden { display: none !important; }
 
-    .menu a:hover {
-        background-color: var(--primary-color);
-        color: white;
-        text-decoration: none;
-    }
-
-    /* Toast */
+    /* === Toast === */
     #snackbar {
-        visibility: hidden;
-        min-width: 250px;
-        margin-left: -125px;
-        background-color: #333;
-        color: #fff;
-        text-align: center;
-        border-radius: 2px;
-        padding: 16px;
-        position: fixed;
-        z-index: 1;
-        left: 50%;
-        bottom: 30px;
-        font-size: 17px;
+        visibility: hidden; min-width: 250px; margin-left: -125px; background-color: #333; color: #fff;
+        text-align: center; border-radius: 2px; padding: 16px; position: fixed; z-index: 200;
+        left: 50%; bottom: 30px; font-size: 17px;
     }
+    #snackbar.show { visibility: visible; -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
+    @-webkit-keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+    @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+    @-webkit-keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+    @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
 
-    #snackbar.show {
-        visibility: visible;
-        -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
-        animation: fadein 0.5s, fadeout 0.5s 2.5s;
-    }
+    /* === Label status badges === */
+    .label-status { border-radius: .25em; font-family: var(--font-family); font-style: normal; font-weight: 700;
+        font-size: 13px !important; color: #fff; display: inline; line-height: 1;
+        padding: .2em .6em .3em; text-align: center; vertical-align: baseline; white-space: nowrap; }
+    .label-status-green { background-color: var(--success-color); }
+    .label-status-red { background-color: var(--danger-color); }
 
-    @-webkit-keyframes fadein {
-        from {bottom: 0; opacity: 0;} 
-        to {bottom: 30px; opacity: 1;}
-    }
+    /* === List buttons === */
+    .listbutton { text-decoration: none; border: none; padding: 8px 20px; font-size: 12px;
+        color: #fff; border-radius: 5px; cursor: pointer; outline: none; transition: 0.2s all; }
+    .listbutton-red { background-color: var(--danger-color); }
+    .listbutton-green { background-color: var(--success-color); }
+    .listbutton-blue { background-color: var(--primary-color); }
+    .listbutton:active { transform: scale(0.98); }
+    .listbutton:disabled { background-color: gray; }
 
-    @keyframes fadein {
-        from {bottom: 0; opacity: 0;}
-        to {bottom: 30px; opacity: 1;}
+    /* === Responsive === */
+    @media (max-width: 900px) {
+      :root { --sidebar-w: 60px; }
+      .sidebar-brand span, .nav-item span { display: none; }
+      .nav-item { justify-content: center; padding: 10px; }
+      .nav-item.active { padding-left: 10px; }
+      .sidebar-username { display: none; }
     }
-
-    @-webkit-keyframes fadeout {
-        from {bottom: 30px; opacity: 1;} 
-        to {bottom: 0; opacity: 0;}
+    @media (max-width: 600px) {
+      body { margin-left: 0; }
+      .sidebar { display: none; }
     }
-
-    @keyframes fadeout {
-        from {bottom: 30px; opacity: 1;}
-        to {bottom: 0; opacity: 0;}
-    }
-
-    /* label status */
-    .label-status { 
-        border-radius: .25em; 
-        font-family: var(--font-family);
-        font-style: normal;
-        font-weight: 400;
-        font-size: 13px!important;
-        color: #fff; 
-        display: inline; 
-        font-size: 75%; 
-        font-weight: 700; 
-        line-height: 1; 
-        padding: .2em .6em .3em; 
-        text-align: center; 
-        vertical-align: baseline; 
-        white-space: nowrap;
-        margin: 0;
-        color: white; 
-        font-size: 14px; 
-        line-height: 1.42857143;
-        height: 100%; 
-        overflow-y: initial; 
-        width: 100%;
-    } 
-    
-    .label-status-green { 
-        background-color: var(--success-color);
-    } 
-    
-    .label-status-red {
-        background-color: var(--danger-color);
-    }
-
-    /* list buttons */
-    .listbutton {
-        text-decoration: none;
-        border: none;
-        padding: 8px 20px;
-        font-size: 12px;
-        color: #fff;
-        border-radius: 5px;
-        cursor: pointer;
-        outline: none;
-        transition: 0.2s all;
-    }
-
-    .listbutton-red {
-        background-color: var(--danger-color);
-    }
-    .listbutton-green {
-        background-color: var(--success-color);
-    }
-
-    .listbutton-blue {
-        background-color: var(--primary-color);
-    }
-    
-    .listbutton:active {
-        transform: scale(0.98);
-    }
-    .listbutton:disabled {
-        background-color: gray;
-    }
-    
-    ${menuStyle}
           `;
     res.send(data);
 });
@@ -3149,6 +3375,7 @@ app.get('/changepassword', (req, res) => {
     </script>
     </head>
     <body>
+      ${CreateMenu({authenticated: true, user: login, authorized: true})}
       <div id="main">
         <center><h1>Change Password for user ${login}</h1></center>
         <h2><center><center></h2>
@@ -5108,6 +5335,7 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
     </script>
     </head>
     <body onload="start()">
+      ${CreateMenu(basicAuth(req, res))}
       <div id="main">`
     if (method == "POST") {
         html += `
@@ -5468,6 +5696,7 @@ function mountUserAdminPage(req, res, method = "POST", actualdata) {
     </script>
     </head>
     <body>
+      ${CreateMenu(basicAuth(req, res))}
       <div id="main">`
     if (method == "POST") {
         html += `
@@ -5835,24 +6064,78 @@ function loadAuthRoles() {
 }
 
 function CreateMenu(auth) {
-    var html = '';
-    //var auth = basicAuth(req, res);
-    html = '<nav class="menu">'
-    
-    if (auth.authenticated == true && auth.user != 'anonymous') {
-        html += '<a href="/logout">Logout</a>'
-        html += '<a href="/streamserver/list">Stream Servers</a>'
-        html += '<a href="/user/list">Users</a>'
-        html += '<a href="/status">Status</a>'
-        html += '<a href="/log">Logs</a>'
-        html += '<a href="/docs/api/">API Documentation</a>'
-        
-        var userCode = '<span class="user-code" style="margin-left: auto; align-self: center; font-weight: bold;">' + auth.user + '</span>';
-        html += userCode
-    } else {
-        html += '<a href="/login">Login</a>'
+    var isAuthenticated = auth.authenticated == true && auth.user != 'anonymous';
+
+    var SVG_HOME = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
+    var SVG_SERVERS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>';
+    var SVG_USERS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+    var SVG_STATUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>';
+    var SVG_LOG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
+    var SVG_API = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
+    var SVG_SETTINGS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+    var SVG_ABOUT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+
+    var html = `<script>
+(function(){
+  var SP_TRANS = {
+    pt: { "nav.home":"Home","nav.servers":"Stream Servers","nav.users":"Usuários","nav.status":"Status","nav.logs":"Logs","nav.api":"API Docs","nav.settings":"Configurações","nav.about":"Sobre","nav.logout":"Sair","nav.login":"Entrar" },
+    en: { "nav.home":"Home","nav.servers":"Stream Servers","nav.users":"Users","nav.status":"Status","nav.logs":"Logs","nav.api":"API Docs","nav.settings":"Settings","nav.about":"About","nav.logout":"Logout","nav.login":"Login" },
+    es: { "nav.home":"Inicio","nav.servers":"Servidores","nav.users":"Usuarios","nav.status":"Estado","nav.logs":"Registros","nav.api":"API Docs","nav.settings":"Ajustes","nav.about":"Acerca de","nav.logout":"Salir","nav.login":"Entrar" },
+    de: { "nav.home":"Startseite","nav.servers":"Stream-Server","nav.users":"Benutzer","nav.status":"Status","nav.logs":"Protokolle","nav.api":"API Docs","nav.settings":"Einstellungen","nav.about":"Über","nav.logout":"Abmelden","nav.login":"Anmelden" },
+    it: { "nav.home":"Home","nav.servers":"Server Stream","nav.users":"Utenti","nav.status":"Stato","nav.logs":"Log","nav.api":"API Docs","nav.settings":"Impostazioni","nav.about":"Informazioni","nav.logout":"Esci","nav.login":"Accedi" },
+    ru: { "nav.home":"Главная","nav.servers":"Серверы","nav.users":"Пользователи","nav.status":"Статус","nav.logs":"Журнал","nav.api":"API Docs","nav.settings":"Настройки","nav.about":"О программе","nav.logout":"Выйти","nav.login":"Войти" },
+    zh: { "nav.home":"首页","nav.servers":"流服务器","nav.users":"用户","nav.status":"状态","nav.logs":"日志","nav.api":"API 文档","nav.settings":"设置","nav.about":"关于","nav.logout":"退出","nav.login":"登录" },
+    ja: { "nav.home":"ホーム","nav.servers":"ストリームサーバー","nav.users":"ユーザー","nav.status":"ステータス","nav.logs":"ログ","nav.api":"API ドキュメント","nav.settings":"設定","nav.about":"について","nav.logout":"ログアウト","nav.login":"ログイン" }
+  };
+  var t = localStorage.getItem('sp_theme') || 'default';
+  if (t !== 'default') document.documentElement.setAttribute('data-theme', t);
+  document.addEventListener('DOMContentLoaded', function(){
+    var lang = localStorage.getItem('sp_lang') || 'pt';
+    var tr = SP_TRANS[lang] || SP_TRANS.pt;
+    document.querySelectorAll('[data-i18n]').forEach(function(el){
+      var k = el.getAttribute('data-i18n');
+      if (tr[k]) el.textContent = tr[k];
+    });
+    var path = window.location.pathname;
+    document.querySelectorAll('.nav-item[href]').forEach(function(el){
+      var href = el.getAttribute('href');
+      if (href && (path === href || (href !== '/' && path.startsWith(href)))) {
+        el.classList.add('active');
+      }
+    });
+  });
+})();
+</script>
+<nav class="sidebar">
+  <div class="sidebar-brand">
+    <img src="/streamproxy_app_icon.png" class="brand-icon" alt="StreamProxy"/>
+    <span>StreamProxy</span>
+  </div>
+  <ul class="nav-list">
+    <li><a class="nav-item" href="/">${SVG_HOME}<span data-i18n="nav.home">Home</span></a></li>`;
+
+    if (isAuthenticated) {
+        html += `
+    <li><a class="nav-item" href="/streamserver/list">${SVG_SERVERS}<span data-i18n="nav.servers">Stream Servers</span></a></li>
+    <li><a class="nav-item" href="/user/list">${SVG_USERS}<span data-i18n="nav.users">Usuários</span></a></li>
+    <li><a class="nav-item" href="/status">${SVG_STATUS}<span data-i18n="nav.status">Status</span></a></li>
+    <li><a class="nav-item" href="/log">${SVG_LOG}<span data-i18n="nav.logs">Logs</span></a></li>
+    <li><a class="nav-item" href="/docs/api/">${SVG_API}<span data-i18n="nav.api">API Docs</span></a></li>
+    <li><a class="nav-item" href="/settings">${SVG_SETTINGS}<span data-i18n="nav.settings">Configurações</span></a></li>`;
     }
-    html += '</nav>'
+    html += `
+    <li><a class="nav-item" href="/about">${SVG_ABOUT}<span data-i18n="nav.about">Sobre</span></a></li>
+  </ul>
+  <div class="sidebar-footer">`;
+    if (isAuthenticated) {
+        html += `<div class="sidebar-username">${auth.user}</div>
+    <a href="/logout" class="sidebar-logout" data-i18n="nav.logout">Sair</a>`;
+    } else {
+        html += `<a href="/login" class="sidebar-logout" data-i18n="nav.login">Entrar</a>`;
+    }
+    html += `
+  </div>
+</nav>`;
     return html;
 }
 
@@ -5860,6 +6143,7 @@ function CreateMenu(auth) {
 function CreateMenuStyle() {
     return "";
 }
+
 
 //function to check if a port is not in use
 function portIsOccupied(port) {
