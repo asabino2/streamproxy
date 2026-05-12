@@ -2538,18 +2538,72 @@ app.get('/status/*', (req, res) => {
 })
 
 
+app.post('/api/config', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    var body = req.body;
+    // Update config fields — never modify port
+    if (body.logConsole !== undefined) config.logConsole = (body.logConsole === true || body.logConsole === 'true');
+    if (body.logWeb !== undefined) config.logWeb = (body.logWeb === true || body.logWeb === 'true');
+    if (body.showErrorInStream !== undefined) config.showErrorInStream = (body.showErrorInStream === true || body.showErrorInStream === 'true');
+    if (body.streamlinkpath !== undefined) config.streamlinkpath = String(body.streamlinkpath);
+    if (body.ffmpegpath !== undefined) config.ffmpegpath = String(body.ffmpegpath);
+    if (body.youtubeapikey !== undefined) config.youtubeapikey = String(body.youtubeapikey);
+    if (body.ffmpeg && typeof body.ffmpeg === 'object') {
+        if (!config.ffmpeg) config.ffmpeg = {};
+        if (body.ffmpeg.codec !== undefined) config.ffmpeg.codec = String(body.ffmpeg.codec);
+        if (body.ffmpeg.format !== undefined) config.ffmpeg.format = String(body.ffmpeg.format);
+        if (body.ffmpeg.serviceprovider !== undefined) config.ffmpeg.serviceprovider = String(body.ffmpeg.serviceprovider);
+    }
+    if (body.streamserver && typeof body.streamserver === 'object') {
+        if (!config.streamserver) config.streamserver = {};
+        if (body.streamserver.startOnInvoke !== undefined) config.streamserver.startOnInvoke = (body.streamserver.startOnInvoke === true || body.streamserver.startOnInvoke === 'true');
+        if (body.streamserver.hideStoppedStreamServerInPlaylist !== undefined) config.streamserver.hideStoppedStreamServerInPlaylist = (body.streamserver.hideStoppedStreamServerInPlaylist === true || body.streamserver.hideStoppedStreamServerInPlaylist === 'true');
+        if (body.streamserver.stopOnNoConnection !== undefined) config.streamserver.stopOnNoConnection = (body.streamserver.stopOnNoConnection === true || body.streamserver.stopOnNoConnection === 'true');
+    }
+    if (body.ui && typeof body.ui === 'object') {
+        if (!config.ui) config.ui = {};
+        if (body.ui.language !== undefined) config.ui.language = String(body.ui.language);
+        if (body.ui.theme !== undefined) config.ui.theme = String(body.ui.theme);
+    }
+    const fswrite = require("fs");
+    try {
+        var configstr = JSON.stringify(config);
+        fswrite.writeFileSync(datadirectory + "streamproxy.config.json", configstr);
+        res.json({ saved: true });
+    } catch (err) {
+        res.status(500).json({ saved: false, error: err.message });
+    }
+});
+
 app.get('/settings', (req, res) => {
     var auth = basicAuth(req, res);
     if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
     var menu = CreateMenu(auth);
+    var cfgLogConsole = config.logConsole ? 'checked' : '';
+    var cfgLogWeb = config.logWeb ? 'checked' : '';
+    var cfgShowError = config.showErrorInStream ? 'checked' : '';
+    var cfgStreamlinkpath = (config.streamlinkpath || '').replace(/"/g, '&quot;');
+    var cfgFfmpegpath = (config.ffmpegpath || '').replace(/"/g, '&quot;');
+    var cfgYoutubeapikey = (config.youtubeapikey || '').replace(/"/g, '&quot;');
+    var cfgFfmpegCodec = ((config.ffmpeg && config.ffmpeg.codec) || '').replace(/"/g, '&quot;');
+    var cfgFfmpegFormat = ((config.ffmpeg && config.ffmpeg.format) || '').replace(/"/g, '&quot;');
+    var cfgFfmpegSp = ((config.ffmpeg && config.ffmpeg.serviceprovider) || '').replace(/"/g, '&quot;');
+    var cfgStartOnInvoke = (config.streamserver && config.streamserver.startOnInvoke) ? 'checked' : '';
+    var cfgHideStopped = (config.streamserver && config.streamserver.hideStoppedStreamServerInPlaylist) ? 'checked' : '';
+    var cfgStopOnNoConn = (config.streamserver && config.streamserver.stopOnNoConnection) ? 'checked' : '';
     var html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>StreamProxy - Configurações</title>
+  <title>StreamProxy - Settings</title>
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/toast.css">
   <script>
@@ -2572,7 +2626,7 @@ app.get('/settings', (req, res) => {
         opt.value = l.code; opt.textContent = l.label;
         langSel.appendChild(opt);
       });
-      langSel.value = localStorage.getItem('sp_lang') || 'pt';
+      langSel.value = localStorage.getItem('sp_lang') || (window.SP_CFG ? window.SP_CFG.lang : 'en');
       var themeSel = document.getElementById('settingsTheme');
       SP_THEME_KEYS.forEach(function(k){
         var opt = document.createElement('option');
@@ -2580,47 +2634,185 @@ app.get('/settings', (req, res) => {
         opt.textContent = (typeof SP_T === 'function') ? SP_T('theme.' + k) : k;
         themeSel.appendChild(opt);
       });
-      themeSel.value = localStorage.getItem('sp_theme') || 'default';
+      themeSel.value = localStorage.getItem('sp_theme') || (window.SP_CFG ? window.SP_CFG.theme : 'default');
     }
-    function applyLang(lang) {
+    function saveSettings() {
+      var lang = document.getElementById('settingsLanguage').value;
+      var theme = document.getElementById('settingsTheme').value;
       localStorage.setItem('sp_lang', lang);
-    }
-    function applyTheme(theme) {
       localStorage.setItem('sp_theme', theme);
       if (theme === 'default') {
         document.documentElement.removeAttribute('data-theme');
       } else {
         document.documentElement.setAttribute('data-theme', theme);
       }
-    }
-    function saveSettings() {
-      var lang = document.getElementById('settingsLanguage').value;
-      var theme = document.getElementById('settingsTheme').value;
-      applyLang(lang);
-      applyTheme(theme);
-      var msg = (typeof SP_T === 'function') ? SP_T('settings.saved') : 'Configurações salvas! Recarregando...';
-      displayToast('green', msg);
-      setTimeout(function(){ location.reload(); }, 1200);
+      var payload = {
+        ui: { language: lang, theme: theme },
+        logConsole: document.getElementById('cfgLogConsole').checked,
+        logWeb: document.getElementById('cfgLogWeb').checked,
+        showErrorInStream: document.getElementById('cfgShowError').checked,
+        streamlinkpath: document.getElementById('cfgStreamlinkpath').value,
+        ffmpegpath: document.getElementById('cfgFfmpegpath').value,
+        youtubeapikey: document.getElementById('cfgYoutubeapikey').value,
+        ffmpeg: {
+          codec: document.getElementById('cfgFfmpegCodec').value,
+          format: document.getElementById('cfgFfmpegFormat').value,
+          serviceprovider: document.getElementById('cfgFfmpegSp').value
+        },
+        streamserver: {
+          startOnInvoke: document.getElementById('cfgStartOnInvoke').checked,
+          hideStoppedStreamServerInPlaylist: document.getElementById('cfgHideStopped').checked,
+          stopOnNoConnection: document.getElementById('cfgStopOnNoConn').checked
+        }
+      };
+      fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Basic ' + btoa(document.cookie.split('auth=')[1] || '') },
+        credentials: 'include',
+        body: JSON.stringify(payload)
+      }).then(function(r){ return r.json(); }).then(function(){
+        var msg = (typeof SP_T === 'function') ? SP_T('settings.saved') : 'Settings saved! Reloading...';
+        displayToast('green', msg);
+        setTimeout(function(){ location.reload(); }, 1200);
+      }).catch(function(){
+        var msg = (typeof SP_T === 'function') ? SP_T('settings.saved') : 'Settings saved! Reloading...';
+        displayToast('green', msg);
+        setTimeout(function(){ location.reload(); }, 1200);
+      });
     }
   </script>
 </head>
 <body onload="initSettings()">
   ${menu}
   <div class="settings-page">
-    <h1 data-i18n="settings.title">Configurações</h1>
+    <h1 data-i18n="settings.title">Settings</h1>
     <div class="settings-card">
+
+      <!-- Interface -->
       <div class="settings-section">
-        <h2 data-i18n="settings.lang">Idioma</h2>
-        <p data-i18n="settings.lang.desc">Selecione o idioma de toda a interface</p>
+        <h2 data-i18n="settings.lang">Language</h2>
+        <p data-i18n="settings.lang.desc">Select the interface language</p>
         <select id="settingsLanguage" class="settings-select"></select>
       </div>
       <div class="settings-section">
-        <h2 data-i18n="settings.theme">Tema</h2>
-        <p data-i18n="settings.theme.desc">Personalize a aparência da interface</p>
+        <h2 data-i18n="settings.theme">Theme</h2>
+        <p data-i18n="settings.theme.desc">Customize the interface appearance</p>
         <select id="settingsTheme" class="settings-select"></select>
       </div>
+
+      <hr class="settings-divider">
+
+      <!-- General -->
+      <div class="settings-section">
+        <h2 data-i18n="settings.section.general">General</h2>
+        <div class="settings-toggle-row">
+          <label class="settings-toggle">
+            <input type="checkbox" id="cfgLogConsole" ${cfgLogConsole}>
+            <span class="settings-toggle-slider"></span>
+          </label>
+          <div>
+            <div class="settings-toggle-label" data-i18n="settings.logconsole">Console Log</div>
+            <div class="settings-toggle-desc" data-i18n="settings.logconsole.desc">Print logs to server console</div>
+          </div>
+        </div>
+        <div class="settings-toggle-row">
+          <label class="settings-toggle">
+            <input type="checkbox" id="cfgLogWeb" ${cfgLogWeb}>
+            <span class="settings-toggle-slider"></span>
+          </label>
+          <div>
+            <div class="settings-toggle-label" data-i18n="settings.logweb">Web Log</div>
+            <div class="settings-toggle-desc" data-i18n="settings.logweb.desc">Display logs at /log (browser)</div>
+          </div>
+        </div>
+        <div class="settings-toggle-row">
+          <label class="settings-toggle">
+            <input type="checkbox" id="cfgShowError" ${cfgShowError}>
+            <span class="settings-toggle-slider"></span>
+          </label>
+          <div>
+            <div class="settings-toggle-label" data-i18n="settings.showerror">Show Error in Stream</div>
+            <div class="settings-toggle-desc" data-i18n="settings.showerror.desc">Show error details in stream output</div>
+          </div>
+        </div>
+        <div class="settings-field">
+          <div class="settings-toggle-label" data-i18n="settings.streamlinkpath">Streamlink Path</div>
+          <div class="settings-toggle-desc" data-i18n="settings.streamlinkpath.desc">Full path to streamlink executable (empty = auto-detect)</div>
+          <input type="text" id="cfgStreamlinkpath" class="settings-input-text" value="${cfgStreamlinkpath}">
+        </div>
+        <div class="settings-field">
+          <div class="settings-toggle-label" data-i18n="settings.ffmpegpath">FFmpeg Path</div>
+          <div class="settings-toggle-desc" data-i18n="settings.ffmpegpath.desc">Full path to ffmpeg executable (empty = auto-detect)</div>
+          <input type="text" id="cfgFfmpegpath" class="settings-input-text" value="${cfgFfmpegpath}">
+        </div>
+        <div class="settings-field">
+          <div class="settings-toggle-label" data-i18n="settings.youtubeapikey">YouTube API Key</div>
+          <div class="settings-toggle-desc" data-i18n="settings.youtubeapikey.desc">API key for YouTube-to-podcast feature</div>
+          <input type="text" id="cfgYoutubeapikey" class="settings-input-text" value="${cfgYoutubeapikey}">
+        </div>
+      </div>
+
+      <hr class="settings-divider">
+
+      <!-- FFmpeg -->
+      <div class="settings-section">
+        <h2 data-i18n="settings.section.ffmpeg">FFmpeg</h2>
+        <div class="settings-field">
+          <div class="settings-toggle-label" data-i18n="settings.ffmpeg.codec">Video Codec</div>
+          <div class="settings-toggle-desc" data-i18n="settings.ffmpeg.codec.desc">Default video codec for transcoded streams</div>
+          <input type="text" id="cfgFfmpegCodec" class="settings-input-text" value="${cfgFfmpegCodec}">
+        </div>
+        <div class="settings-field">
+          <div class="settings-toggle-label" data-i18n="settings.ffmpeg.format">Video Format</div>
+          <div class="settings-toggle-desc" data-i18n="settings.ffmpeg.format.desc">Default video container format</div>
+          <input type="text" id="cfgFfmpegFormat" class="settings-input-text" value="${cfgFfmpegFormat}">
+        </div>
+        <div class="settings-field">
+          <div class="settings-toggle-label" data-i18n="settings.ffmpeg.serviceprovider">Service Provider</div>
+          <div class="settings-toggle-desc" data-i18n="settings.ffmpeg.serviceprovider.desc">Metadata service provider name in transcoded streams</div>
+          <input type="text" id="cfgFfmpegSp" class="settings-input-text" value="${cfgFfmpegSp}">
+        </div>
+      </div>
+
+      <hr class="settings-divider">
+
+      <!-- Stream Server -->
+      <div class="settings-section">
+        <h2 data-i18n="settings.section.streamserver">Stream Server</h2>
+        <div class="settings-toggle-row">
+          <label class="settings-toggle">
+            <input type="checkbox" id="cfgStartOnInvoke" ${cfgStartOnInvoke}>
+            <span class="settings-toggle-slider"></span>
+          </label>
+          <div>
+            <div class="settings-toggle-label" data-i18n="settings.ss.startoninvoke">Start on Invoke</div>
+            <div class="settings-toggle-desc" data-i18n="settings.ss.startoninvoke.desc">Auto-start a stopped stream server when accessed</div>
+          </div>
+        </div>
+        <div class="settings-toggle-row">
+          <label class="settings-toggle">
+            <input type="checkbox" id="cfgHideStopped" ${cfgHideStopped}>
+            <span class="settings-toggle-slider"></span>
+          </label>
+          <div>
+            <div class="settings-toggle-label" data-i18n="settings.ss.hidestopped">Hide Stopped in Playlist</div>
+            <div class="settings-toggle-desc" data-i18n="settings.ss.hidestopped.desc">Hide stopped stream servers in M3U playlist</div>
+          </div>
+        </div>
+        <div class="settings-toggle-row">
+          <label class="settings-toggle">
+            <input type="checkbox" id="cfgStopOnNoConn" ${cfgStopOnNoConn}>
+            <span class="settings-toggle-slider"></span>
+          </label>
+          <div>
+            <div class="settings-toggle-label" data-i18n="settings.ss.stoponnoconn">Stop on No Connection</div>
+            <div class="settings-toggle-desc" data-i18n="settings.ss.stoponnoconn.desc">Stop stream server when no clients are connected</div>
+          </div>
+        </div>
+      </div>
+
       <div>
-        <button onclick="saveSettings()" class="btn btn--primary" data-i18n="settings.save">Salvar configurações</button>
+        <button onclick="saveSettings()" class="btn btn--primary" data-i18n="settings.save">Save settings</button>
       </div>
     </div>
   </div>
@@ -3053,6 +3245,31 @@ body {
     .settings-select:focus { outline: none; border-color: var(--accent); }
     .settings-page { padding: 20px 0; }
     .settings-page h1 { margin-bottom: 24px; color: var(--text); font-size: 22px; }
+
+    /* === Settings toggles & inputs === */
+    .settings-toggle-row { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; }
+    .settings-toggle { position: relative; width: 42px; height: 24px; flex-shrink: 0; margin-top: 2px; }
+    .settings-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .settings-toggle-slider {
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background-color: var(--border); transition: .2s; border-radius: 24px;
+    }
+    .settings-toggle-slider:before {
+      position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
+      background-color: white; transition: .2s; border-radius: 50%;
+    }
+    .settings-toggle input:checked + .settings-toggle-slider { background-color: var(--accent); }
+    .settings-toggle input:checked + .settings-toggle-slider:before { transform: translateX(18px); }
+    .settings-toggle-label { font-size: 0.875rem; font-weight: 500; color: var(--text); line-height: 1.4; }
+    .settings-toggle-desc { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+    .settings-input-text {
+      padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px;
+      font-size: 0.875rem; font-family: inherit; background: var(--surface); color: var(--text);
+      max-width: 420px; width: 100%; transition: border-color 150ms;
+    }
+    .settings-input-text:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(49,130,206,0.15); }
+    .settings-field { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; }
+    .settings-divider { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
 
     /* === About page === */
     .about-card { max-width: 600px; display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
@@ -3544,6 +3761,17 @@ function loadconfig() {
             config.youtubeapikey = process.env.YOUTUBE_API_KEY;
         }
     */
+
+    if (config.youtubeapikey == undefined) {
+        config.youtubeapikey = "";
+    }
+
+    if (config.ui == undefined) {
+        config.ui = { language: "en", theme: "default" };
+    } else {
+        if (config.ui.language == undefined) config.ui.language = "en";
+        if (config.ui.theme == undefined) config.ui.theme = "default";
+    }
 
 }
 
@@ -6143,9 +6371,21 @@ function CreateMenu(auth) {
     ja:{"form.btn.save":"保存","form.btn.reset":"リセット","form.ss.title_create":"ストリームサーバー作成","form.ss.title_edit":"ストリームサーバー編集","form.ss.desc_create":"このページでストリームサーバーを作成し複数ユーザーに配信できます（サーバーごとに1スレッド）","form.ss.lbl.name":"ストリーム名:","form.ss.lbl.description":"ストリーム説明（任意）:","form.ss.lbl.method":"ストリーミング方式:","form.ss.lbl.channel":"チャンネル番号（任意）:","form.ss.lbl.logourl":"ロゴURL（任意）:","form.ss.lbl.url":"URL:","form.ss.ph.url":"ストリームURL","form.ss.msg.added":"ストリームサーバーを追加しました","form.ss.msg.changed":"ストリームサーバーを変更しました","form.ss.err.special_desc":"説明に特殊文字を使用しないでください","form.ss.err.special_name":"名前に特殊文字を使用しないでください","form.ss.err.channel":"チャンネル番号フィールドには数字のみ使用可能","form.ss.err.required":"赤いすべての必須フィールドを入力してください","form.ss.field.ffmpeg_streamprovider":"プロバイダー（任意）:","form.ss.field.ffmpeg_videoformat":"ビデオ形式（任意）:","form.ss.field.ffmpeg_videocodec":"映像コーデック（任意）:","form.ss.field.ffmpeg_framesize":"フレームサイズ（任意）:","form.ss.field.ffmpeg_framerate":"フレームレート（任意）:","form.ss.field.ffmpeg_bitrate":"ビットレート（任意）:","form.ss.field.ffmpeg_audiocodec":"音声コーデック（任意）:","form.ss.field.Audiostream_title":"タイトル（任意）:","form.user.title_create":"ユーザー作成","form.user.title_edit":"ユーザー編集","form.user.desc_create":"このページで新しいユーザーを作成します","form.user.lbl.username":"ユーザー名:","form.user.lbl.fullname":"フルネーム:","form.user.lbl.password":"パスワード:","form.user.lbl.roles":"認証ロール","form.user.msg.created":"ユーザーを作成しました","form.user.msg.changed":"ユーザーを変更しました"}
   };
   Object.keys(SP_EXTRA2).forEach(function(l){ if(SP_TRANS[l]) Object.assign(SP_TRANS[l], SP_EXTRA2[l]); });
-  var t = localStorage.getItem('sp_theme') || 'default';
+  var SP_EXTRA3 = {
+    pt:{"settings.section.general":"Geral","settings.logconsole":"Log no Console","settings.logconsole.desc":"Exibe logs no console do servidor","settings.logweb":"Log Web","settings.logweb.desc":"Exibe logs em /log (browser)","settings.showerror":"Exibir Erros no Stream","settings.showerror.desc":"Mostra detalhes de erro na saída do stream","settings.streamlinkpath":"Caminho do Streamlink","settings.streamlinkpath.desc":"Caminho completo do executável streamlink (vazio = auto)","settings.ffmpegpath":"Caminho do FFmpeg","settings.ffmpegpath.desc":"Caminho completo do executável ffmpeg (vazio = auto)","settings.youtubeapikey":"Chave API YouTube","settings.youtubeapikey.desc":"Chave de API para conversão de canal YouTube em podcast","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Codec de Vídeo","settings.ffmpeg.codec.desc":"Codec de vídeo padrão para streams transcodificados","settings.ffmpeg.format":"Formato de Vídeo","settings.ffmpeg.format.desc":"Formato de contêiner de vídeo padrão","settings.ffmpeg.serviceprovider":"Provedor de Serviço","settings.ffmpeg.serviceprovider.desc":"Nome do provedor de serviço nos metadados","settings.section.streamserver":"Stream Server","settings.ss.startoninvoke":"Iniciar ao Acessar","settings.ss.startoninvoke.desc":"Inicia automaticamente um servidor parado quando acessado","settings.ss.hidestopped":"Ocultar Parados na Playlist","settings.ss.hidestopped.desc":"Oculta servidores parados no playlist M3U","settings.ss.stoponnoconn":"Parar sem Conexões","settings.ss.stoponnoconn.desc":"Para o servidor quando não há clientes conectados"},
+    en:{"settings.section.general":"General","settings.logconsole":"Console Log","settings.logconsole.desc":"Print logs to server console","settings.logweb":"Web Log","settings.logweb.desc":"Display logs at /log (browser)","settings.showerror":"Show Error in Stream","settings.showerror.desc":"Show error details in stream output","settings.streamlinkpath":"Streamlink Path","settings.streamlinkpath.desc":"Full path to streamlink executable (empty = auto-detect)","settings.ffmpegpath":"FFmpeg Path","settings.ffmpegpath.desc":"Full path to ffmpeg executable (empty = auto-detect)","settings.youtubeapikey":"YouTube API Key","settings.youtubeapikey.desc":"API key for YouTube-to-podcast feature","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Video Codec","settings.ffmpeg.codec.desc":"Default video codec for transcoded streams","settings.ffmpeg.format":"Video Format","settings.ffmpeg.format.desc":"Default video container format","settings.ffmpeg.serviceprovider":"Service Provider","settings.ffmpeg.serviceprovider.desc":"Metadata service provider name in transcoded streams","settings.section.streamserver":"Stream Server","settings.ss.startoninvoke":"Start on Invoke","settings.ss.startoninvoke.desc":"Auto-start a stopped stream server when accessed","settings.ss.hidestopped":"Hide Stopped in Playlist","settings.ss.hidestopped.desc":"Hide stopped stream servers in M3U playlist","settings.ss.stoponnoconn":"Stop on No Connection","settings.ss.stoponnoconn.desc":"Stop stream server when no clients are connected"},
+    es:{"settings.section.general":"General","settings.logconsole":"Log de Consola","settings.logconsole.desc":"Muestra logs en la consola del servidor","settings.logweb":"Log Web","settings.logweb.desc":"Muestra logs en /log (navegador)","settings.showerror":"Mostrar Error en Stream","settings.showerror.desc":"Muestra detalles de error en la salida del stream","settings.streamlinkpath":"Ruta de Streamlink","settings.streamlinkpath.desc":"Ruta completa al ejecutable streamlink (vacío = auto)","settings.ffmpegpath":"Ruta de FFmpeg","settings.ffmpegpath.desc":"Ruta completa al ejecutable ffmpeg (vacío = auto)","settings.youtubeapikey":"Clave API YouTube","settings.youtubeapikey.desc":"Clave de API para conversión de canal YouTube a podcast","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Codec de Vídeo","settings.ffmpeg.codec.desc":"Codec de vídeo predeterminado para streams transcodificados","settings.ffmpeg.format":"Formato de Vídeo","settings.ffmpeg.format.desc":"Formato de contenedor de vídeo predeterminado","settings.ffmpeg.serviceprovider":"Proveedor de Servicio","settings.ffmpeg.serviceprovider.desc":"Nombre del proveedor de servicio en metadatos","settings.section.streamserver":"Stream Server","settings.ss.startoninvoke":"Iniciar al Acceder","settings.ss.startoninvoke.desc":"Inicia automáticamente un servidor detenido al acceder","settings.ss.hidestopped":"Ocultar Detenidos en Playlist","settings.ss.hidestopped.desc":"Oculta servidores detenidos en el playlist M3U","settings.ss.stoponnoconn":"Detener sin Conexiones","settings.ss.stoponnoconn.desc":"Detiene el servidor cuando no hay clientes conectados"},
+    de:{"settings.section.general":"Allgemein","settings.logconsole":"Konsolenprotokoll","settings.logconsole.desc":"Protokoll in der Serverkonsole ausgeben","settings.logweb":"Web-Protokoll","settings.logweb.desc":"Protokoll unter /log anzeigen (Browser)","settings.showerror":"Fehler im Stream anzeigen","settings.showerror.desc":"Fehlerdetails in der Stream-Ausgabe anzeigen","settings.streamlinkpath":"Streamlink-Pfad","settings.streamlinkpath.desc":"Vollständiger Pfad zur streamlink-Ausführungsdatei (leer = automatisch)","settings.ffmpegpath":"FFmpeg-Pfad","settings.ffmpegpath.desc":"Vollständiger Pfad zur ffmpeg-Ausführungsdatei (leer = automatisch)","settings.youtubeapikey":"YouTube API-Schlüssel","settings.youtubeapikey.desc":"API-Schlüssel für YouTube-Kanal-zu-Podcast-Funktion","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Video-Codec","settings.ffmpeg.codec.desc":"Standard-Video-Codec für transkodierte Streams","settings.ffmpeg.format":"Videoformat","settings.ffmpeg.format.desc":"Standard-Videocontainerformat","settings.ffmpeg.serviceprovider":"Dienstanbieter","settings.ffmpeg.serviceprovider.desc":"Name des Dienstanbieters in Metadaten","settings.section.streamserver":"Stream-Server","settings.ss.startoninvoke":"Beim Zugriff starten","settings.ss.startoninvoke.desc":"Gestoppten Stream-Server beim Zugriff automatisch starten","settings.ss.hidestopped":"Gestoppte in Playlist ausblenden","settings.ss.hidestopped.desc":"Gestoppte Stream-Server in der M3U-Playlist ausblenden","settings.ss.stoponnoconn":"Bei keiner Verbindung stoppen","settings.ss.stoponnoconn.desc":"Stream-Server stoppen, wenn keine Clients verbunden sind"},
+    it:{"settings.section.general":"Generale","settings.logconsole":"Log Console","settings.logconsole.desc":"Stampa i log nella console del server","settings.logweb":"Log Web","settings.logweb.desc":"Mostra i log su /log (browser)","settings.showerror":"Mostra Errore nello Stream","settings.showerror.desc":"Mostra i dettagli degli errori nell'output dello stream","settings.streamlinkpath":"Percorso Streamlink","settings.streamlinkpath.desc":"Percorso completo all'eseguibile streamlink (vuoto = auto)","settings.ffmpegpath":"Percorso FFmpeg","settings.ffmpegpath.desc":"Percorso completo all'eseguibile ffmpeg (vuoto = auto)","settings.youtubeapikey":"Chiave API YouTube","settings.youtubeapikey.desc":"Chiave API per la conversione canale YouTube in podcast","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Codec Video","settings.ffmpeg.codec.desc":"Codec video predefinito per stream transcodificati","settings.ffmpeg.format":"Formato Video","settings.ffmpeg.format.desc":"Formato contenitore video predefinito","settings.ffmpeg.serviceprovider":"Provider di Servizio","settings.ffmpeg.serviceprovider.desc":"Nome del provider di servizio nei metadati","settings.section.streamserver":"Stream Server","settings.ss.startoninvoke":"Avvia all'Accesso","settings.ss.startoninvoke.desc":"Avvia automaticamente un server fermo quando acceduto","settings.ss.hidestopped":"Nascondi Fermi nella Playlist","settings.ss.hidestopped.desc":"Nasconde i server fermi nella playlist M3U","settings.ss.stoponnoconn":"Ferma senza Connessioni","settings.ss.stoponnoconn.desc":"Ferma il server quando non ci sono client connessi"},
+    ru:{"settings.section.general":"Общие","settings.logconsole":"Лог консоли","settings.logconsole.desc":"Выводить логи в консоль сервера","settings.logweb":"Веб-лог","settings.logweb.desc":"Отображать логи по адресу /log (браузер)","settings.showerror":"Показывать ошибки в потоке","settings.showerror.desc":"Показывать детали ошибок в выводе потока","settings.streamlinkpath":"Путь к Streamlink","settings.streamlinkpath.desc":"Полный путь к исполняемому файлу streamlink (пусто = авто)","settings.ffmpegpath":"Путь к FFmpeg","settings.ffmpegpath.desc":"Полный путь к исполняемому файлу ffmpeg (пусто = авто)","settings.youtubeapikey":"Ключ API YouTube","settings.youtubeapikey.desc":"Ключ API для функции преобразования YouTube-канала в подкаст","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Видеокодек","settings.ffmpeg.codec.desc":"Видеокодек по умолчанию для транскодированных потоков","settings.ffmpeg.format":"Видеоформат","settings.ffmpeg.format.desc":"Формат видеоконтейнера по умолчанию","settings.ffmpeg.serviceprovider":"Поставщик услуг","settings.ffmpeg.serviceprovider.desc":"Имя поставщика услуг в метаданных","settings.section.streamserver":"Стрим-сервер","settings.ss.startoninvoke":"Запускать при доступе","settings.ss.startoninvoke.desc":"Автоматически запускать остановленный сервер при обращении","settings.ss.hidestopped":"Скрыть остановленные в плейлисте","settings.ss.hidestopped.desc":"Скрывать остановленные серверы в плейлисте M3U","settings.ss.stoponnoconn":"Остановить без подключений","settings.ss.stoponnoconn.desc":"Останавливать сервер при отсутствии клиентов"},
+    zh:{"settings.section.general":"常规","settings.logconsole":"控制台日志","settings.logconsole.desc":"将日志打印到服务器控制台","settings.logweb":"Web日志","settings.logweb.desc":"在 /log 显示日志（浏览器）","settings.showerror":"在流中显示错误","settings.showerror.desc":"在流输出中显示错误详情","settings.streamlinkpath":"Streamlink路径","settings.streamlinkpath.desc":"Streamlink可执行文件的完整路径（空=自动检测）","settings.ffmpegpath":"FFmpeg路径","settings.ffmpegpath.desc":"FFmpeg可执行文件的完整路径（空=自动检测）","settings.youtubeapikey":"YouTube API密钥","settings.youtubeapikey.desc":"YouTube频道转播客功能的API密钥","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"视频编解码器","settings.ffmpeg.codec.desc":"转码流的默认视频编解码器","settings.ffmpeg.format":"视频格式","settings.ffmpeg.format.desc":"默认视频容器格式","settings.ffmpeg.serviceprovider":"服务提供商","settings.ffmpeg.serviceprovider.desc":"转码流元数据中的服务提供商名称","settings.section.streamserver":"流服务器","settings.ss.startoninvoke":"访问时启动","settings.ss.startoninvoke.desc":"访问时自动启动已停止的流服务器","settings.ss.hidestopped":"在播放列表中隐藏已停止","settings.ss.hidestopped.desc":"在M3U播放列表中隐藏已停止的流服务器","settings.ss.stoponnoconn":"无连接时停止","settings.ss.stoponnoconn.desc":"没有客户端连接时停止流服务器"},
+    ja:{"settings.section.general":"全般","settings.logconsole":"コンソールログ","settings.logconsole.desc":"サーバーコンソールにログを出力","settings.logweb":"Webログ","settings.logweb.desc":"/log でログを表示（ブラウザ）","settings.showerror":"ストリームにエラーを表示","settings.showerror.desc":"ストリーム出力にエラーの詳細を表示","settings.streamlinkpath":"Streamlinkパス","settings.streamlinkpath.desc":"streamlink実行ファイルのフルパス（空=自動検出）","settings.ffmpegpath":"FFmpegパス","settings.ffmpegpath.desc":"ffmpeg実行ファイルのフルパス（空=自動検出）","settings.youtubeapikey":"YouTube APIキー","settings.youtubeapikey.desc":"YouTubeチャンネルをポッドキャストに変換するためのAPIキー","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"ビデオコーデック","settings.ffmpeg.codec.desc":"トランスコードストリームのデフォルトビデオコーデック","settings.ffmpeg.format":"ビデオフォーマット","settings.ffmpeg.format.desc":"デフォルトのビデオコンテナフォーマット","settings.ffmpeg.serviceprovider":"サービスプロバイダー","settings.ffmpeg.serviceprovider.desc":"トランスコードストリームのメタデータのサービスプロバイダー名","settings.section.streamserver":"ストリームサーバー","settings.ss.startoninvoke":"アクセス時に起動","settings.ss.startoninvoke.desc":"アクセス時に停止中のストリームサーバーを自動起動","settings.ss.hidestopped":"プレイリストで停止中を非表示","settings.ss.hidestopped.desc":"M3UプレイリストでストリームサーバーM3Uを非表示","settings.ss.stoponnoconn":"接続なし時に停止","settings.ss.stoponnoconn.desc":"クライアントが接続されていない場合にサーバーを停止"}
+  };
+  Object.keys(SP_EXTRA3).forEach(function(l){ if(SP_TRANS[l]) Object.assign(SP_TRANS[l], SP_EXTRA3[l]); });
+  var SP_CFG = ${JSON.stringify({lang: (config.ui && config.ui.language) ? config.ui.language : 'en', theme: (config.ui && config.ui.theme) ? config.ui.theme : 'default'})};
+  var t = localStorage.getItem('sp_theme') || SP_CFG.theme;
   if (t !== 'default') document.documentElement.setAttribute('data-theme', t);
-  var _spLang = localStorage.getItem('sp_lang') || 'pt';
+  var _spLang = localStorage.getItem('sp_lang') || SP_CFG.lang;
   window.SP_LANG = _spLang;
   window.SP_T = function(key) {
     var tr = SP_TRANS[_spLang] || SP_TRANS.pt;
