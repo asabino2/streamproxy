@@ -45,6 +45,118 @@ const createHash = crypto.createHash;
 //const datadirectory = argv['datadirectory'] || process.env.STREAMPROXY_DATA_DIR || './';
 const datadirectory = argv['datadirectory'] || process.env.STREAMPROXY_DATA_DIR || '/data/';
 
+// ===== SECURITY: Sanitization helpers =====
+
+// Shell argument escaping - prevents command injection
+function shellEscape(arg) {
+    if (arg == null) return '';
+    arg = String(arg);
+    // Remove null bytes
+    arg = arg.replace(/\0/g, '');
+    // Only allow safe characters for shell arguments (alphanumeric, dots, slashes, colons, hyphens, underscores, percent, equals, ampersand, question mark)
+    if (/^[a-zA-Z0-9._\-:\/\\%=&?@]+$/.test(arg)) {
+        return arg;
+    }
+    // For URLs and other complex args, wrap in single quotes with proper escaping
+    if (os.platform() === 'win32') {
+        // Windows: wrap in double quotes, escape internal double quotes
+        return '"' + arg.replace(/"/g, '\\"').replace(/[&|<>^]/g, '^$&') + '"';
+    } else {
+        // Unix: wrap in single quotes, escape internal single quotes
+        return "'" + arg.replace(/'/g, "'\\''") + "'";
+    }
+}
+
+// Validate that a string looks like a URL (http/https/rtmp/rtsp only)
+function isValidStreamUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    try {
+        const parsed = new URL(url);
+        return ['http:', 'https:', 'rtmp:', 'rtsp:', 'rtp:', 'udp:', 'mms:'].includes(parsed.protocol);
+    } catch (e) {
+        return false;
+    }
+}
+
+// Validate ffmpeg/streamlink parameter values (codec names, formats, etc.)
+function isValidParam(value) {
+    if (!value || typeof value !== 'string') return false;
+    // Only allow alphanumeric, hyphens, underscores, dots, colons
+    return /^[a-zA-Z0-9._\-:]+$/.test(value) && value.length <= 64;
+}
+
+// Validate resolution format (e.g., "1920x1080")
+function isValidResolution(value) {
+    if (!value || typeof value !== 'string') return false;
+    return /^\d{1,5}x\d{1,5}$/.test(value);
+}
+
+// Validate PID (must be a positive integer)
+function isValidPID(pid) {
+    var num = parseInt(pid, 10);
+    return !isNaN(num) && num > 0 && String(num) === String(pid);
+}
+
+// HTML escape to prevent XSS
+function escapeHtml(text) {
+    if (text == null) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+}
+
+// Safe property merge - prevents prototype pollution
+function safeMerge(target, source, allowedKeys) {
+    if (!source || typeof source !== 'object') return target;
+    var dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+    for (var key in source) {
+        if (!source.hasOwnProperty(key)) continue;
+        if (dangerousKeys.includes(key)) continue;
+        if (allowedKeys && !allowedKeys.includes(key)) continue;
+        if (source[key] != undefined) {
+            target[key] = source[key];
+        }
+    }
+    return target;
+}
+
+// Secure password hashing using scrypt (replaces SHA-1)
+function hashPassword(password) {
+    var salt = crypto.randomBytes(16).toString('hex');
+    var hash = crypto.scryptSync(password, salt, 64).toString('hex');
+    return salt + ':' + hash;
+}
+
+function verifyPassword(password, stored) {
+    // Support legacy SHA-1 hashes (40 hex chars without colon)
+    if (stored && stored.length === 40 && !stored.includes(':')) {
+        return createHash('sha1').update(password).digest('hex') === stored;
+    }
+    // New scrypt format: salt:hash
+    var parts = stored.split(':');
+    if (parts.length !== 2) return false;
+    var salt = parts[0];
+    var hash = parts[1];
+    var derivedKey = crypto.scryptSync(password, salt, 64).toString('hex');
+    return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(derivedKey, 'hex'));
+}
+
+// Validate Referer URL to prevent open redirect
+function isSafeRedirect(referer, req) {
+    if (!referer) return false;
+    try {
+        var url = new URL(referer);
+        var host = req.get('host');
+        return url.host === host;
+    } catch (e) {
+        return false;
+    }
+}
+// ===== END SECURITY HELPERS =====
+
 
 
 /*
@@ -147,6 +259,16 @@ var publicip = "44";
 
 
 
+
+// Security headers middleware
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    next();
+});
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
@@ -376,15 +498,15 @@ app.get('/audiostream/play', (req, res) => {
         case "streamlink":
             log(`opening connect to stream in url ${url} for audiconverter with streamlink and ffmpeg (from ${clientIP})`);
             if (os.platform != "win32") {
-                command = config.streamlinkpath + 'streamlink ' + url + ' worst --config /config.txt --stdout | ' + config.ffmpegpath + 'ffmpeg  -loglevel error -i pipe:0 -c:v none -c:a libmp3lame -b:a 128k -joint_stereo 0 -y -f mp3 ' + metadata + ' -'
+                command = config.streamlinkpath + 'streamlink ' + shellEscape(url) + ' worst --config /config.txt --stdout | ' + config.ffmpegpath + 'ffmpeg  -loglevel error -i pipe:0 -c:v none -c:a libmp3lame -b:a 128k -joint_stereo 0 -y -f mp3 ' + metadata + ' -'
             } else {
-                command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' -c:v none -c:a libmp3lame -b:a 128k -joint_stereo 0 -y -f mp3 ' + metadata + '  -'
+                command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + shellEscape(url) + ' -c:v none -c:a libmp3lame -b:a 128k -joint_stereo 0 -y -f mp3 ' + metadata + '  -'
             }
 
             break;
         case "ffmpeg":
             log(`opening connect to stream in url ${url} for audiconverter with ffmpeg (from ${clientIP})`);
-            command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' -c:v none -c:a libmp3lame -b:a 128k -joint_stereo 0 -y -f mp3 ' + metadata + '  -'
+            command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + shellEscape(url) + ' -c:v none -c:a libmp3lame -b:a 128k -joint_stereo 0 -y -f mp3 ' + metadata + '  -'
 
             break;
         default:
@@ -502,7 +624,7 @@ app.get('/videostream/play', (req, res) => {
     }
 
 
-    command = config.streamlinkpath + 'streamlink ' + url + '  best --config /config.txt --stdout | ' + config.ffmpegpath + 'ffmpeg -loglevel error -i pipe:0 ' + vcodec + ' ' + framesize + ' ' + framerate + ' ' + acodec + ' ' + bitrates + ' -strict -2 -mbd rd -copyinkf -flags +ilme+ildct -fflags +genpts ' + service_provider + ' ' + service_name + ' ' + vformat + ' -tune zerolatency -'
+    command = config.streamlinkpath + 'streamlink ' + shellEscape(url) + '  best --config /config.txt --stdout | ' + config.ffmpegpath + 'ffmpeg -loglevel error -i pipe:0 ' + vcodec + ' ' + framesize + ' ' + framerate + ' ' + acodec + ' ' + bitrates + ' -strict -2 -mbd rd -copyinkf -flags +ilme+ildct -fflags +genpts ' + service_provider + ' ' + service_name + ' ' + vformat + ' -tune zerolatency -'
 
     log(`opening connect to stream in url ${url} for audiconverter with streamlink and ffmpeg (from ${clientIP})`);
     if (os.platform == 'win32') {
@@ -618,15 +740,15 @@ app.get('/streamserver/status', (req, res) => {
                   
                   htmlData += '<tr>';
                   
-                  htmlData += '<td>'+table.UUID+'</td>';
-                  htmlData += '<td>'+table.streamname+'</td>';
-                  htmlData += '<td>'+table.user+'</td>';
-                  htmlData += '<td>'+table.client.ip+'</td>';
-                  htmlData += '<td>'+table.client.os+'</td>';
+                  htmlData += '<td>'+escapeHtmlClient(table.UUID)+'</td>';
+                  htmlData += '<td>'+escapeHtmlClient(table.streamname)+'</td>';
+                  htmlData += '<td>'+escapeHtmlClient(table.user)+'</td>';
+                  htmlData += '<td>'+escapeHtmlClient(table.client.ip)+'</td>';
+                  htmlData += '<td>'+escapeHtmlClient(table.client.os)+'</td>';
                  
-                      htmlData += '<td>'+table.client.browser+'</td>';
+                      htmlData += '<td>'+escapeHtmlClient(table.client.browser)+'</td>';
                   
-                  htmlData += '<td>'+table.client.source+'</td>';
+                  htmlData += '<td>'+escapeHtmlClient(table.client.source)+'</td>';
                   
                   
                   htmlData += '</tr>';
@@ -728,11 +850,21 @@ app.get('/videostream/restream', (req, res) => {
         res.status(400).send("<h1>400 Bad Request - the query parameter output is required</h1>");
         return false;
     }
+    if (!isValidStreamUrl(output)) {
+        res.status(400).send("<h1>400 Bad Request - invalid output URL</h1>");
+        return false;
+    }
+    if (format != undefined && !isValidParam(format)) {
+        res.status(400).send("<h1>400 Bad Request - invalid format parameter</h1>");
+        return false;
+    }
 
     if (req.query.vcodec != undefined) {
+        if (!isValidParam(req.query.vcodec)) { res.status(400).send("Invalid vcodec parameter"); return false; }
         vcodec = "-c:v " + req.query.vcodec;
     }
     if (req.query.acodec != undefined) {
+        if (!isValidParam(req.query.acodec)) { res.status(400).send("Invalid acodec parameter"); return false; }
         acodec = "-c:a " + req.query.acodec;
     }
 
@@ -777,15 +909,15 @@ app.get('/videostream/restream', (req, res) => {
         case "streamlink":
             log(`opening connect for restream ${url} to ${output} with streamlink and ffmpeg (from ${clientIP})`);
             if (os.platform != "win32") {
-                command = config.streamlinkpath + 'streamlink ' + url + '  best --config /config.txt --stdout | ' + config.ffmpegpath + 'ffmpeg  -loglevel error -i pipe:0 -f ' + format + ' ' + output;
+                command = config.streamlinkpath + 'streamlink ' + shellEscape(url) + '  best --config /config.txt --stdout | ' + config.ffmpegpath + 'ffmpeg  -loglevel error -i pipe:0 -f ' + format + ' ' + shellEscape(output);
             } else {
-                command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' ' + vcodec + ' ' + acodec + '  -f ' + format + ' ' + output;
+                command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + shellEscape(url) + ' ' + vcodec + ' ' + acodec + '  -f ' + format + ' ' + shellEscape(output);
             }
 
             break;
         case "ffmpeg":
             log(`opening connect for restream ${url} to ${output} with ffmpeg (from ${clientIP})`);
-            command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + url + ' ' + vcodec + ' ' + acodec + '  -f ' + format + ' ' + output;
+            command = config.ffmpegpath + 'ffmpeg  -loglevel error -i ' + shellEscape(url) + ' ' + vcodec + ' ' + acodec + '  -f ' + format + ' ' + shellEscape(output);
 
             break;
         default:
@@ -1083,10 +1215,11 @@ url="http://${authenticationpart}${req.hostname}:${getPortCalled(req)}/audiostre
 })
 
 app.get('/test', (req, res) => {
-    //res.send(new Date('2022-08-19T20:30:00Z').toUTCString())
-    var envvar = req.query.var;
-    res.send(envvar + "=" + process.env[envvar]);
-    //res.send(getYoutubeLiveVideos());
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+    res.json({ status: "ok", message: "test endpoint" });
 })
 
 app.get('/api/streamserver/status', (req, res) => {
@@ -1125,10 +1258,13 @@ app.get('/api/streaminfo', (req, res) => {
     //appsetheader(res);
     url = req.query.url;
 
-    url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
+    if (!isValidStreamUrl(url)) {
+        res.status(400).json({ error: "true", message: "Invalid stream URL" });
+        return;
+    }
 
     var returncommand = "";
-    var commandffmpeg = config.ffmpegpath + "ffprobe -v quiet -print_format json -show_format -show_streams -show_programs " + url;
+    var commandffmpeg = config.ffmpegpath + "ffprobe -v quiet -print_format json -show_format -show_streams -show_programs " + shellEscape(url);
     var status = "";
     var erro = "";
 
@@ -1169,7 +1305,7 @@ app.post('/api/streamserver', (req, res) => {
     var mystreamserver = req.body;
 
     var mystreamserverindex = arrstreamserverlist.findIndex(value => value.streamname === mystreamserver.streamname);
-    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
     res.header('Access-Control-Allow-Credentials', true);
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH');
@@ -1203,7 +1339,7 @@ app.put('/api/streamserver', (req, res) => {
     try {
         log(`streamserver ${mystreamserver.streamname} change requested from ${req.ip}, json data: ${JSON.stringify(mystreamserver)}`)
         var mystreamserverindex = arrstreamserverlist.findIndex(value => value.streamname === mystreamserver.streamname);
-        res.header('Access-Control-Allow-Origin', '*');
+        res.header('Access-Control-Allow-Origin', req.headers.origin || '');
         res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
         res.header('Access-Control-Allow-Credentials', true);
         res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH');
@@ -1214,13 +1350,10 @@ app.put('/api/streamserver', (req, res) => {
         }
 
         if (mystreamserverindex >= 0) {
-            /* save the existent fields */
-            for (var key in mystreamserver) {
-                if (mystreamserver[key] != undefined) {
-                    arrstreamserverlist[mystreamserverindex][key] = mystreamserver[key];
-                    log(`field ${key} changed to ${mystreamserver[key]}`)
-                }
-            }
+            /* save the existent fields - using safeMerge to prevent prototype pollution */
+            var allowedStreamServerKeys = ['streamname', 'streamdescription', 'channelnumber', 'logourl', 'url', 'streammethod', 'type', 'streamprovider', 'videoformat', 'videocodec', 'framesize', 'framerate', 'audiocodec', 'title', 'bitrate', 'service_provider'];
+            safeMerge(arrstreamserverlist[mystreamserverindex], mystreamserver, allowedStreamServerKeys);
+            log(`Streamserver ${mystreamserver.streamname} fields updated via safeMerge`);
             //arrstreamserverlist[mystreamserverindex] = mystreamserver
             log("Streamserver " + mystreamserver.streamname + " has changed")
             saveStreamServers();
@@ -1249,7 +1382,7 @@ app.delete('/api/streamserver/:streamname', (req, res) => {
     }
     var mystreamserver = { streamname: req.params.streamname };
     var mystreamserverindex = arrstreamserverlist.findIndex(value => value.streamname === mystreamserver.streamname);
-    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
     res.header('Access-Control-Allow-Credentials', true);
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE');
@@ -1327,8 +1460,10 @@ app.get('/api/checkstream', (req, res) => {
 
     //appsetheader(res);
     url = req.query.url;
-    url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
-
+    if (!isValidStreamUrl(url)) {
+        res.status(400).json({ error: "true", message: "Invalid stream URL" });
+        return;
+    }
 
     res.json(checkstream(url));
 });
@@ -1342,9 +1477,15 @@ app.get('/api/getsnapshot', (req, res) => {
 
     //appsetheader(res);
     url = req.query.url;
-    url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
-    //resolution = req.query.resolution;
+    if (!isValidStreamUrl(url)) {
+        res.status(400).json({ error: "true", message: "Invalid stream URL" });
+        return;
+    }
     const resolution = req.query.resolution || "0x0";
+    if (!isValidResolution(resolution)) {
+        res.status(400).json({ error: "true", message: "Invalid resolution format. Use WIDTHxHEIGHT" });
+        return;
+    }
     const [reswidth, resheight] = resolution.split('x');
     
 
@@ -1375,7 +1516,7 @@ app.post('/api/users', (req, res) => {
         return false;
     }
     var newuser = req.body;
-    newuser.password = sha1(newuser.password);
+    newuser.password = hashPassword(newuser.password);
     newuser.username = encodeURI(newuser.username);
     // check if user already exists
 
@@ -1415,12 +1556,9 @@ app.put('/api/users', (req, res) => {
         res.statusText = "user " + changeuser.username + "doesn exists";
         res.status(500).json({ userchanged: false, message: "user " + changeuser.username + "doesn exists" })
     } else {
-        for (var key in changeuser) {
-            if (changeuser[key] != undefined) {
-                users[userIndex][key] = changeuser[key];
-                log(`field ${key} changed to ${changeuser[key]}`)
-            }
-        }
+        var allowedUserKeys = ['username', 'fullname', 'authorizations'];
+        safeMerge(users[userIndex], changeuser, allowedUserKeys);
+        log(`User ${changeuser.username} fields updated via safeMerge`);
 
 
         saveUsers();
@@ -1461,7 +1599,7 @@ app.put('/api/users/changepassword', (req, res) => {
         return false;
     }
     var newpassword = req.body.password;
-    users[userIndex].password = sha1(newpassword);
+    users[userIndex].password = hashPassword(newpassword);
     saveUsers();
     res.status(200).json({ passwordchanged: true });
 });
@@ -1509,9 +1647,11 @@ app.get('/info', (req, res) => {
 });
 
 app.get('/clientinfo', (req, res) => {
-    const b64auth = (req.headers.authorization || '').split(' ')[1] || ''
-    const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
-    var clientinfo = { host: req.hostname, port: getPortCalled(req), path: req.path, authdata: { username: login, password: password }, clientdata: req.useragent };
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+    var clientinfo = { host: req.hostname, port: getPortCalled(req), path: req.path, authdata: { username: auth.user }, clientdata: req.useragent };
     res.setHeader('Content-Type', 'application/json');
     res.json(clientinfo);
 });
@@ -1549,7 +1689,7 @@ app.get('/log', (req, res) => {
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/toast.css">
     <script>
-      
+      var authorization = '${req.headers.authorization || ""}';
     let lineslog = 0;
       let lastline = 0;
       let initialized = false;
@@ -1612,7 +1752,7 @@ app.get('/log', (req, res) => {
                 headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
-                'Authorization': '${req.headers.authorization}'
+                'Authorization': authorization
                  },
                   method: 'POST'
                   
@@ -1655,24 +1795,12 @@ app.get('/log', (req, res) => {
     res.send(htmldata)
 })
 
-app.get('/teste', (req, res) => {
-    if (req.query.password == undefined) {
-        res.send(req.headers.authorization);
-    } else {
-        res.send("hashed password => " + sha1(req.query.password))
-    }
-
-    //req.pipe(tunnelteste);
-})
-
-app.post('/teste', (req, res) => {
-    console.log(req.body);
-})
+// /teste endpoint removed for security - it exposed auth headers and acted as a hash oracle
 
 
 app.post('/api/killProcess', (req, res) => {
 
-    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
     res.header('Access-Control-Allow-Credentials', true);
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH');
@@ -1766,7 +1894,7 @@ app.get('/status', (req, res) => {
                     headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
-                    'Authorization': '${req.headers.authorization}'
+                    'Authorization': '${escapeHtml(req.headers.authorization || "")}'
                      },
                       method: 'POST',
                       body: JSON.stringify({PID: PID})
@@ -1851,7 +1979,7 @@ app.get('/status', (req, res) => {
                   } else {
                    htmlData += '<td id="'+table.PID+':PID"><a href="./status/'+table.PID+'">'+table.PID+'</a></td>';  
                   }
-                  htmlData += '<td>'+table.url+'</td>';
+                  htmlData += '<td>'+escapeHtmlClient(table.url)+'</td>';
                   if(table.streamlinkserver == true){
                       htmlData += '<td>http://${req.host}:'+table.streamArgs+'</td>';
                   } else if (table.restream == true) {
@@ -1868,8 +1996,8 @@ app.get('/status', (req, res) => {
                   } else {
                       htmlData += '<td id="'+table.PID+':datasize">none</td>';
                   }
-                  htmlData += '<td>'+table.user+'</td>';
-                  htmlData += '<td>'+table.command+'</td>';
+                  htmlData += '<td>'+escapeHtmlClient(table.user)+'</td>';
+                  htmlData += '<td>'+escapeHtmlClient(table.command)+'</td>';
                   htmlData += '<td><button onclick="killProcess('+table.PID+')" id="killbutton">kill process</button></td>';
                   htmlData += '</tr>';
                  
@@ -2162,10 +2290,10 @@ app.get('/streamserver/list', (req, res) => {
           } else {
             htmlData += '<td width="60"> </td>';
           }
-          htmlData += '<td >'+table.streamname+'</td>';
-          htmlData += '<td id="'+table.streamname+':channelnumber">'+table.channelnumber+'</td>';
-          htmlData += '<td id="'+table.streamname+':streamdescription">'+table.streamdescription+'</td>';
-          htmlData += '<td id="'+table.streamname+':url">'+table.url+'</td>';
+          htmlData += '<td >'+escapeHtmlClient(table.streamname)+'</td>';
+          htmlData += '<td id="'+escapeHtmlClient(table.streamname)+':channelnumber">'+escapeHtmlClient(table.channelnumber)+'</td>';
+          htmlData += '<td id="'+escapeHtmlClient(table.streamname)+':streamdescription">'+escapeHtmlClient(table.streamdescription)+'</td>';
+          htmlData += '<td id="'+escapeHtmlClient(table.streamname)+':url">'+escapeHtmlClient(table.url)+'</td>';
        
           htmlData += '<td id="'+table.streamname+':type">'+getStreamTypeIcon(table.type) + '</td>';
           htmlData += '<td id="'+table.streamname+':streammethod">'+table.streammethod+'</td>';
@@ -2543,7 +2671,7 @@ app.post('/api/config', (req, res) => {
     if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
-    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
     var body = req.body;
     // Update config fields — never modify port
@@ -2961,7 +3089,7 @@ app.get('/', async function(req, res) {
     const portreplacer = new RegExp(portsearch, 'g');
     const localhostreplacer = new RegExp(localhostsearch, 'g');
     res.set({ 'Server': 'streamproxy' });
-    res.set({ 'Access-Control-Allow-Origin': '*' });
+    res.set({ 'Access-Control-Allow-Origin': req.headers.origin || '' });
     appsetheader(res);
     https.get('https://raw.githubusercontent.com/asabino2/streamproxy/master/README.md', (resp) => {
         let data = '';
@@ -3823,7 +3951,7 @@ function removeprocess(PID) {
 
 function ffprobeStreamlink(url) {
     var child_process = require("child_process");
-    var returncommand = child_process.execSync(config.streamlinkpath + "streamlink " + url + "  best --config /config.txt --stdout | " + config.ffmpegpath + "ffprobe -v quiet -print_format json -show_format -show_streams -show_programs -");
+    var returncommand = child_process.execSync(config.streamlinkpath + "streamlink " + shellEscape(url) + "  best --config /config.txt --stdout | " + config.ffmpegpath + "ffprobe -v quiet -print_format json -show_format -show_streams -show_programs -");
 
     return returncommand;
 }
@@ -3833,7 +3961,7 @@ function checkStreamlink(url) {
     var erro = "";
 
     var child_process = require("child_process");
-    var command = config.streamlinkpath + "streamlink " + url + "  best --config /config.txt --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f null -";
+    var command = config.streamlinkpath + "streamlink " + shellEscape(url) + "  best --config /config.txt --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f null -";
 
     try {
         retunrcommand = require('child_process').execSync(command);
@@ -3886,11 +4014,13 @@ function getbinaryimagefromStream(url, width, height)
     var child_process = require("child_process");
     if(width == 0 || height == 0)
     {
-        var command = config.streamlinkpath + "streamlink " + url + " best --config /config.txt --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f image2 -";
+        var command = config.streamlinkpath + "streamlink " + shellEscape(url) + " best --config /config.txt --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f image2 -";
     }
     else
     {
-        var command = config.streamlinkpath + "streamlink " + url + " best --config /config.txt --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f image2 -s " + width + "x" + height + " -";
+        var safeWidth = String(parseInt(width, 10) || 0);
+        var safeHeight = String(parseInt(height, 10) || 0);
+        var command = config.streamlinkpath + "streamlink " + shellEscape(url) + " best --config /config.txt --stdout | " + config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i pipe:0 -vframes 1 -q:v 2 -f image2 -s " + safeWidth + "x" + safeHeight + " -";
     }
     
 
@@ -3908,7 +4038,7 @@ function getbinaryimagefromStream(url, width, height)
 function checkIfstreamlinkCanHandle(url) {
     var child_process = require("child_process");
     try {
-        var returncommand = child_process.execSync(config.streamlinkpath + "streamlink --can-handle-url " + url);
+        var returncommand = child_process.execSync(config.streamlinkpath + "streamlink --can-handle-url " + shellEscape(url));
         return true;
     } catch (e) {
         return false;
@@ -4033,7 +4163,7 @@ function basicAuth(req, res) {
     authdataconfig = users.find(item => item.username == login)
     if (authdataconfig != undefined) {
 
-        if (authdataconfig.password == sha1(password)) { // login successfully, check if authorized
+        if (verifyPassword(password, authdataconfig.password)) { // login successfully, check if authorized
             var isAuthorized = checkAuthorization(req, login);
             if (isAuthorized == true && login != "anonymous" && login != "system") {
                 return { authenticated: true, user: login, auth: b64auth, authorized: true };
@@ -4068,12 +4198,13 @@ function getChildProcess(PID, globalpids = []) {
     try {
 
         pids = [];
+        var safePID = String(parseInt(PID, 10));
         if (os.platform == 'win32') {
-            command = `powershell -c "Get-WmiObject -Class Win32_Process -Filter "ParentProcessID=${PID}" | Select-Object -ExpandProperty ProcessID"`;
+            command = 'powershell -c "Get-WmiObject -Class Win32_Process -Filter \\"ParentProcessID=' + safePID + '\\" | Select-Object -ExpandProperty ProcessID"';
 
         } else {
 
-            command = "ps h --ppid " + PID + " -o pid";
+            command = "ps h --ppid " + safePID + " -o pid";
         }
 
         returncommand = require('child_process').execSync(command)
@@ -4142,10 +4273,11 @@ function getPIDData(pid) {
     var command = "";
     var returncommand = "";
     var parts = [];
+    var safePid = String(parseInt(pid, 10));
     if (os.platform != "win32") {
-        command = "ps h --pid " + pid + " -o args";
+        command = "ps h --pid " + safePid + " -o args";
     } else {
-        command = `powershell -c "Get-WmiObject -Class Win32_Process -Filter ParentProcessID=${pid} | Select-Object -ExpandProperty CommandLine"`;
+        command = 'powershell -c "Get-WmiObject -Class Win32_Process -Filter \\"ParentProcessID=' + safePid + '\\" | Select-Object -ExpandProperty CommandLine"';
     }
 
     returncommand = require('child_process').execSync(command)
@@ -4716,7 +4848,7 @@ function isCallFromBrowser(req) {
 }
 
 function checkstream(url) {
-    var commandffmpeg = config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i \"" + url + "\" -vframes 1 -q:v 2 -f null -";
+    var commandffmpeg = config.ffmpegpath + "ffmpeg -hide_banner -loglevel error -ss 00:00:01 -i " + shellEscape(url) + " -vframes 1 -q:v 2 -f null -";
 
     var status = "";
     var erro = "";
@@ -4787,10 +4919,14 @@ function commonFrontendFunctionsGet() {
     var data = "";
     data = `
     /* Common functions */
+    function escapeHtmlClient(text) {
+        if (text == null) return '';
+        return String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
+    }
     function displayToast(color,text) {
     var x = document.getElementById("snackbar");
     x.className = "show";
-    x.innerHTML = text;
+    x.textContent = text;
     x.style.backgroundColor = color;
     setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
   }`;
@@ -5488,8 +5624,8 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
                 `
 
     if (req.headers.referer != undefined) {
-        if (req.headers.referer.indexOf('/streamserver/list') > -1) {
-            html += `window.location.assign("${req.headers.referer}");
+        if (req.headers.referer.indexOf('/streamserver/list') > -1 && isSafeRedirect(req.headers.referer, req)) {
+            html += `window.location.assign("${escapeHtml(req.headers.referer)}");
         `;
         }
     }
@@ -5865,8 +6001,8 @@ function mountUserAdminPage(req, res, method = "POST", actualdata) {
                 `
 
     if (req.headers.referer != undefined) {
-        if (req.headers.referer.indexOf('/user/list') > -1) {
-            html += `window.location.assign("${req.headers.referer}");
+        if (req.headers.referer.indexOf('/user/list') > -1 && isSafeRedirect(req.headers.referer, req)) {
+            html += `window.location.assign("${escapeHtml(req.headers.referer)}");
         `;
         }
     } else {
@@ -6123,7 +6259,15 @@ function sha1(txt) {
 
 
 function getUsersList() {
-    return users;
+    return users.map(function(user) {
+        var safeUser = {};
+        for (var key in user) {
+            if (key !== 'password' && user.hasOwnProperty(key)) {
+                safeUser[key] = user[key];
+            }
+        }
+        return safeUser;
+    });
 }
 
 function getRolesList() {
