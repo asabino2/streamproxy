@@ -471,7 +471,7 @@ When file does not exist, it is created with:
   },
   {
     "username": "admin",
-    "password": "d033e22ae348aeb5660fc2140aec35850c4da997",
+    "password": "*********",
     "fullname": "Administrator",
     "authorizations": {
       "administrator": true
