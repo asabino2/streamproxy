@@ -3088,7 +3088,7 @@ app.get('/', async function(req, res) {
     const serverreplacer = new RegExp(serversearch, 'g');
     const portreplacer = new RegExp(portsearch, 'g');
     const localhostreplacer = new RegExp(localhostsearch, 'g');
-    res.set({ 'Server': 'streamproxy' });
+    res.set({ 'Server': 'asabino2.streamproxy' });
     res.set({ 'Access-Control-Allow-Origin': req.headers.origin || '' });
     appsetheader(res);
     https.get('https://raw.githubusercontent.com/asabino2/streamproxy/master/README.md', (resp) => {
