@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Add Stream</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>New StreamServer</h1>
+      <p class="subtitle">Save the current tab stream in StreamProxy.</p>
+
+      <form id="stream-form">
+        <label for="url">Stream URL</label>
+        <input id="url" name="url" type="url" required />
+
+        <label for="streamname">Streamserver name</label>
+        <input id="streamname" name="streamname" type="text" maxlength="80" required />
+
+        <label for="streamdescription">Description</label>
+        <input id="streamdescription" name="streamdescription" type="text" maxlength="120" />
+
+        <label for="channelnumber">Channel number</label>
+        <input id="channelnumber" name="channelnumber" type="number" min="1" step="1" />
+
+        <label for="logourl">Logo URL</label>
+        <input id="logourl" name="logourl" type="url" />
+
+        <label for="streammethod">Method</label>
+        <select id="streammethod" name="streammethod" required>
+          <option value="/videostream/streamlink">Videostream (streamlink)</option>
+          <option value="/videostream/ffmpeg">Videostream (ffmpeg)</option>
+          <option value="/videostream/play">Videostream (streamlink + ffmpeg)</option>
+          <option value="/audiostream/play">Convert video to audio</option>
+        </select>
+
+        <details>
+          <summary>Advanced fields</summary>
+          <label for="streamprovider">Provider</label>
+          <input id="streamprovider" name="streamprovider" type="text" maxlength="80" />
+
+          <label for="videoformat">Video format</label>
+          <input id="videoformat" name="videoformat" type="text" maxlength="40" />
+
+          <label for="videocodec">Video codec</label>
+          <input id="videocodec" name="videocodec" type="text" maxlength="40" />
+
+          <label for="framesize">Frame size</label>
+          <input id="framesize" name="framesize" type="text" placeholder="1280x720" maxlength="20" />
+
+          <label for="framerate">Frame rate</label>
+          <input id="framerate" name="framerate" type="text" placeholder="30" maxlength="10" />
+
+          <label for="audiocodec">Audio codec</label>
+          <input id="audiocodec" name="audiocodec" type="text" maxlength="40" />
+
+          <label for="bitrate">Bitrate</label>
+          <input id="bitrate" name="bitrate" type="text" placeholder="2000k" maxlength="20" />
+
+          <label for="title">Title (audio)</label>
+          <input id="title" name="title" type="text" maxlength="120" />
+        </details>
+
+        <button id="submit-button" type="submit">Add streamserver</button>
+      </form>
+
+      <p id="status" class="status" aria-live="polite"></p>
+      <a href="options.html" target="_blank" class="options-link">Configure StreamProxy</a>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

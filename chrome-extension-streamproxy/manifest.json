@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "StreamProxy Quick Add",
+  "description": "Adds the current page stream as a streamserver in StreamProxy.",
+  "version": "1.0.0",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "icons": {
+    "16": "streamproxy_app_icon.png",
+    "32": "streamproxy_app_icon.png",
+    "48": "streamproxy_app_icon.png",
+    "128": "streamproxy_app_icon.png"
+  },
+  "action": {
+    "default_title": "Add stream to StreamProxy",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "streamproxy_app_icon.png",
+      "32": "streamproxy_app_icon.png"
+    }
+  },
+  "options_page": "options.html"
+}
