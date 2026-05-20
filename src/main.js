@@ -1501,6 +1501,147 @@ app.get('/api/status', (req, res) => {
     res.json(processes);
 })
 
+// Endpoint para obter informações de versão do sistema
+app.get('/api/info/versions', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+    res.json(info);
+});
+
+// Endpoint para atualizar o streamproxy (git pull + restart)
+app.post('/api/system/update-streamproxy', (req, res) => {
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Access-Control-Allow-Credentials', true);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH');
+
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+
+    // Check if user is admin
+    var isAdmin = false;
+    if (auth.user && auth.user !== 'anonymous') {
+        var u = users.find(function(x){ return x.username === auth.user; });
+        if (u && u.authorizations && u.authorizations.administrator === true) {
+            isAdmin = true;
+        }
+    }
+
+    if (!isAdmin) {
+        res.status(403).json({ error: true, message: "Apenas administradores podem atualizar o streamproxy" });
+        return false;
+    }
+
+    log("StreamProxy update requested from IP " + req.ip);
+    
+    try {
+        const child_process = require("child_process");
+        
+        // Execute git pull
+        try {
+            child_process.execSync('git pull', { cwd: __dirname + '/..' });
+            log("Git pull executed successfully");
+        } catch (e) {
+            log("Git pull error: " + e.message);
+        }
+
+        res.status(200).json({ message: "Atualização do streamproxy iniciada. Aplicação será reiniciada em poucos segundos..." });
+        
+        // Restart the application after sending response
+        setTimeout(() => {
+            log("Reiniciando streamproxy...");
+            process.exit(0);
+        }, 1000);
+    } catch (e) {
+        log("Erro ao atualizar streamproxy: " + e.message);
+        res.status(500).json({ error: true, message: "Erro ao atualizar streamproxy: " + e.message });
+    }
+});
+
+// Endpoint para atualizar FFmpeg ou Streamlink
+app.post('/api/system/update-component', (req, res) => {
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Access-Control-Allow-Credentials', true);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH');
+
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+
+    // Check if user is admin
+    var isAdmin = false;
+    if (auth.user && auth.user !== 'anonymous') {
+        var u = users.find(function(x){ return x.username === auth.user; });
+        if (u && u.authorizations && u.authorizations.administrator === true) {
+            isAdmin = true;
+        }
+    }
+
+    if (!isAdmin) {
+        res.status(403).json({ error: true, message: "Apenas administradores podem atualizar componentes" });
+        return false;
+    }
+
+    var component = req.body.component;
+    var platform = os.platform();
+    
+    if (!component || (component !== 'ffmpeg' && component !== 'streamlink')) {
+        res.status(400).json({ error: true, message: "Componente inválido" });
+        return false;
+    }
+
+    log("Update " + component + " requested from IP " + req.ip);
+
+    try {
+        const child_process = require("child_process");
+        var command = "";
+        var updateMsg = "";
+
+        if (platform === 'win32') {
+            if (component === 'ffmpeg') {
+                // Windows: usar chocolatey ou download direto
+                command = "choco upgrade ffmpeg -y";
+                updateMsg = "FFmpeg será atualizado via Chocolatey";
+            } else if (component === 'streamlink') {
+                command = "choco upgrade streamlink -y";
+                updateMsg = "Streamlink será atualizado via Chocolatey";
+            }
+        } else {
+            // Linux/Mac
+            if (component === 'ffmpeg') {
+                command = "apt-get update && apt-get install -y ffmpeg";
+                updateMsg = "FFmpeg será atualizado via apt-get";
+            } else if (component === 'streamlink') {
+                command = "pip install --upgrade streamlink";
+                updateMsg = "Streamlink será atualizado via pip";
+            }
+        }
+
+        res.status(200).json({ message: updateMsg + ". A verificação será feita em alguns segundos..." });
+
+        // Execute update asynchronously
+        setTimeout(() => {
+            try {
+                child_process.execSync(command, { stdio: 'inherit' });
+                log(component + " atualizado com sucesso");
+                // Refresh versions
+                getInfo();
+            } catch (e) {
+                log("Erro ao atualizar " + component + ": " + e.message);
+            }
+        }, 500);
+    } catch (e) {
+        log("Erro ao processar atualização de " + component + ": " + e.message);
+        res.status(500).json({ error: true, message: "Erro ao processar atualização: " + e.message });
+    }
+});
+
 
 app.get('/api/users', (req, res) => {
     var auth = basicAuth(req, res);
@@ -2975,10 +3116,240 @@ app.get('/about', (req, res) => {
   <title>StreamProxy - Sobre</title>
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/toast.css">
+  <style>
+    .about-components-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .component-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      background: var(--surface);
+    }
+    .component-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    .component-name {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .component-status {
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+    .component-status.outdated {
+      background: #fff3e0;
+      color: #e65100;
+    }
+    .component-versions {
+      font-size: 14px;
+      margin: 8px 0;
+    }
+    .component-version-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      color: var(--text-muted);
+    }
+    .component-version-row strong {
+      color: var(--text);
+    }
+    .component-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    .btn-update-component {
+      flex: 1;
+      min-width: 120px;
+    }
+    .about-update-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .about-update-status {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+  </style>
   <script>
     ${commonFrontendFunctionsGet()}
     var CURRENT_VERSION = '${pjson.version}';
     var IS_ADMIN = ${isAdmin};
+    var localVersions = {};
+    
+    function updateStreamproxy() {
+      if (!confirm('Deseja atualizar o StreamProxy? O aplicativo será reiniciado.')) {
+        return;
+      }
+      var btn = document.getElementById('aboutUpdateBtnAction');
+      btn.disabled = true;
+      btn.textContent = 'Atualizando...';
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/system/update-streamproxy');
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.onload = function() {
+        if (xhr.status === 200) {
+          showToast('Atualizando StreamProxy. Aplicação será reiniciada em alguns segundos...', 'success');
+        } else {
+          showToast('Erro ao atualizar: ' + xhr.responseText, 'error');
+          btn.disabled = false;
+          btn.textContent = 'Atualizar agora';
+        }
+      };
+      xhr.onerror = function() {
+        showToast('Erro ao atualizar StreamProxy', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Atualizar agora';
+      };
+      xhr.send(JSON.stringify({}));
+    }
+    
+    function updateComponent(component) {
+      if (!confirm('Deseja atualizar ' + component + '?')) {
+        return;
+      }
+      var btn = document.getElementById('updateBtn' + component.charAt(0).toUpperCase() + component.slice(1));
+      btn.disabled = true;
+      var originalText = btn.textContent;
+      btn.textContent = 'Atualizando...';
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/system/update-component');
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.onload = function() {
+        try {
+          var response = JSON.parse(xhr.responseText);
+          if (xhr.status === 200) {
+            showToast(response.message, 'success');
+            setTimeout(function() {
+              loadComponentVersions();
+            }, 3000);
+          } else {
+            showToast('Erro: ' + response.message, 'error');
+          }
+        } catch (e) {
+          showToast('Erro ao atualizar: ' + xhr.responseText, 'error');
+        }
+        btn.disabled = false;
+        btn.textContent = originalText;
+      };
+      xhr.onerror = function() {
+        showToast('Erro ao atualizar ' + component, 'error');
+        btn.disabled = false;
+        btn.textContent = originalText;
+      };
+      xhr.send(JSON.stringify({component: component}));
+    }
+    
+    function loadComponentVersions() {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', '/api/info/versions');
+      xhr.onload = function() {
+        try {
+          var info = JSON.parse(xhr.responseText);
+          localVersions = info.versions;
+          
+          // Update FFmpeg
+          document.getElementById('ffmpegCurrentVersion').textContent = info.versions.ffmpeg || 'Não instalado';
+          // Update Streamlink
+          document.getElementById('streamlinkCurrentVersion').textContent = info.versions.streamlink || 'Não instalado';
+          
+          loadRemoteComponentVersions();
+        } catch (e) {
+          console.error('Erro ao carregar versões locais:', e);
+        }
+      };
+      xhr.onerror = function() {
+        console.error('Erro ao conectar ao servidor');
+      };
+      xhr.send();
+    }
+    
+    function loadRemoteComponentVersions() {
+      // FFmpeg version
+      fetch('https://api.github.com/repos/FFmpeg/FFmpeg/releases?per_page=1')
+        .then(r => r.json())
+        .then(data => {
+          var version = data[0]?.tag_name?.replace(/^v/, '') || '?';
+          document.getElementById('ffmpegLatestVersion').textContent = version;
+          updateComponentStatus('ffmpeg', localVersions.ffmpeg, version);
+        })
+        .catch(e => {
+          document.getElementById('ffmpegLatestVersion').textContent = 'Indisponível';
+        });
+      
+      // Streamlink version
+      fetch('https://api.github.com/repos/streamlink/streamlink/releases?per_page=1')
+        .then(r => r.json())
+        .then(data => {
+          var version = data[0]?.tag_name?.replace(/^v/, '') || '?';
+          document.getElementById('streamlinkLatestVersion').textContent = version;
+          updateComponentStatus('streamlink', localVersions.streamlink, version);
+        })
+        .catch(e => {
+          document.getElementById('streamlinkLatestVersion').textContent = 'Indisponível';
+        });
+    }
+    
+    function updateComponentStatus(component, local, remote) {
+      var statusEl = document.getElementById(component + 'Status');
+      var statusLabelEl = document.getElementById(component + 'StatusLabel');
+      var buttonEl = document.getElementById('updateBtn' + component.charAt(0).toUpperCase() + component.slice(1));
+      
+      if (!statusEl) return;
+      
+      if (!local || local === '') {
+        statusEl.innerHTML = '<span class="component-status outdated">⚠️ Não instalado</span>';
+        if (buttonEl && IS_ADMIN) buttonEl.classList.remove('hidden');
+        return;
+      }
+      
+      if (remote === '?' || remote === 'Indisponível') {
+        statusEl.innerHTML = '<span class="component-status">✓ Instalado</span>';
+        return;
+      }
+      
+      var comparison = compareVersions(local, remote);
+      if (comparison < 0) {
+        statusEl.innerHTML = '<span class="component-status outdated">⬆️ Desatualizado</span>';
+        if (buttonEl && IS_ADMIN) buttonEl.classList.remove('hidden');
+      } else if (comparison === 0) {
+        statusEl.innerHTML = '<span class="component-status">✓ Atualizado</span>';
+        if (buttonEl) buttonEl.classList.add('hidden');
+      } else {
+        statusEl.innerHTML = '<span class="component-status">✓ Versão nova</span>';
+        if (buttonEl) buttonEl.classList.add('hidden');
+      }
+    }
+    
+    function compareVersions(a, b) {
+      var av = (a || '0').split('.').map(Number);
+      var bv = (b || '0').split('.').map(Number);
+      for (var i = 0; i < Math.max(av.length, bv.length); i++) {
+        var ap = av[i] || 0;
+        var bp = bv[i] || 0;
+        if (ap < bp) return -1;
+        if (ap > bp) return 1;
+      }
+      return 0;
+    }
+    
     function loadAboutData() {
       document.getElementById('aboutCurrentVersion').textContent = CURRENT_VERSION;
       var x = new XMLHttpRequest();
@@ -2989,13 +3360,14 @@ app.get('/about', (req, res) => {
           var latest = data.version || '?';
           document.getElementById('aboutLatestVersion').textContent = latest;
           var wrap = document.getElementById('aboutUpdateWrap');
-          var btn = document.getElementById('aboutUpdateBtn');
+          var btn = document.getElementById('aboutUpdateBtnAction');
           var status = document.getElementById('aboutUpdateStatus');
           wrap.style.display = 'flex';
           if (latest === CURRENT_VERSION) {
             status.textContent = (typeof SP_T==='function') ? SP_T('about.up_to_date') : '✅ Você está na versão mais recente.';
+            if (btn) btn.classList.add('hidden');
           } else {
-            status.textContent = ((typeof SP_T==='function') ? SP_T('about.new_version') : '⬆️ Nova versão disponível:') + ' ' + latest;
+            status.innerHTML = '<strong>⬆️ Nova versão disponível: ' + latest + '</strong>';
             if (IS_ADMIN && btn) { btn.classList.remove('hidden'); }
           }
         } catch(e) {
@@ -3004,8 +3376,11 @@ app.get('/about', (req, res) => {
       };
       x.onerror = function() { document.getElementById('aboutLatestVersion').textContent = (typeof SP_T==='function') ? SP_T('about.unavailable') : 'Indisponível'; };
       x.send();
+      
+      loadComponentVersions();
       loadChangelog();
     }
+    
     function loadChangelog() {
       var cx = new XMLHttpRequest();
       cx.open('GET', 'https://raw.githubusercontent.com/asabino2/streamproxy/master/README.md');
@@ -3043,6 +3418,8 @@ app.get('/about', (req, res) => {
       </div>
       <p class="about-description" data-i18n="about.desc">Proxy e servidor de streams de vídeo e áudio com suporte a múltiplos métodos de transmissão.</p>
       <p class="about-author" data-i18n="about.author">Desenvolvido por Alexander Sabino</p>
+      
+      <h3 style="margin-top: 24px; margin-bottom: 16px;">StreamProxy</h3>
       <div class="about-version-grid">
         <div class="about-version-item">
           <span class="about-version-label" data-i18n="about.current_ver">Versão atual</span>
@@ -3055,9 +3432,53 @@ app.get('/about', (req, res) => {
       </div>
       <div id="aboutUpdateWrap" class="about-update-wrap" style="display:none">
         <span id="aboutUpdateStatus" class="about-update-status"></span>
-        ${isAdmin ? '<a href="https://github.com/asabino2/streamproxy/releases" target="_blank" id="aboutUpdateBtn" class="btn btn--primary hidden" data-i18n="about.releases">Ver lançamentos</a>' : ''}
+        ${isAdmin ? '<button onclick="updateStreamproxy()" id="aboutUpdateBtnAction" class="btn btn--primary hidden">Atualizar agora</button>' : ''}
       </div>
-      <div class="about-changelog">
+      
+      <h3 style="margin-top: 32px; margin-bottom: 16px;">Componentes do Sistema</h3>
+      <div class="about-components-grid">
+        <div class="component-card">
+          <div class="component-header">
+            <span class="component-name">FFmpeg</span>
+            <span id="ffmpegStatus"></span>
+          </div>
+          <div class="component-versions">
+            <div class="component-version-row">
+              <span>Versão local:</span>
+              <strong id="ffmpegCurrentVersion">Carregando...</strong>
+            </div>
+            <div class="component-version-row">
+              <span>Versão remota:</span>
+              <strong id="ffmpegLatestVersion">Carregando...</strong>
+            </div>
+          </div>
+          <div class="component-buttons">
+            <button onclick="updateComponent('ffmpeg')" id="updateBtnFfmpeg" class="btn btn--primary btn-update-component hidden">Atualizar</button>
+          </div>
+        </div>
+        
+        <div class="component-card">
+          <div class="component-header">
+            <span class="component-name">Streamlink</span>
+            <span id="streamlinkStatus"></span>
+          </div>
+          <div class="component-versions">
+            <div class="component-version-row">
+              <span>Versão local:</span>
+              <strong id="streamlinkCurrentVersion">Carregando...</strong>
+            </div>
+            <div class="component-version-row">
+              <span>Versão remota:</span>
+              <strong id="streamlinkLatestVersion">Carregando...</strong>
+            </div>
+          </div>
+          <div class="component-buttons">
+            <button onclick="updateComponent('streamlink')" id="updateBtnStreamlink" class="btn btn--primary btn-update-component hidden">Atualizar</button>
+          </div>
+        </div>
+      </div>
+      
+      <div class="about-changelog" style="margin-top: 32px;">
         <h3 data-i18n="about.changelog">Últimas alterações</h3>
         <div id="aboutChangelog"><p style="font-style:italic;color:var(--text-muted)" data-i18n="about.loading">Carregando...</p></div>
       </div>
