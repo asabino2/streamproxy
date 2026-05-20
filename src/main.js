@@ -2985,7 +2985,7 @@ app.get('/settings', (req, res) => {
         opt.value = l.code; opt.textContent = l.label;
         langSel.appendChild(opt);
       });
-      langSel.value = localStorage.getItem('sp_lang') || (window.SP_CFG ? window.SP_CFG.lang : 'en');
+    langSel.value = localStorage.getItem('sp_lang') || (window.SP_CFG ? window.SP_CFG.lang : 'pt');
       var themeSel = document.getElementById('settingsTheme');
       SP_THEME_KEYS.forEach(function(k){
         var opt = document.createElement('option');
@@ -3489,16 +3489,16 @@ app.get('/about', (req, res) => {
             updateComponentStatus('ffmpeg', localVersions.ffmpeg, version);
           } catch (e) {
             console.error('Error parsing FFmpeg data:', e);
-            document.getElementById('ffmpegLatestVersion').textContent = 'Erro';
+                        document.getElementById('ffmpegLatestVersion').textContent = (typeof SP_T==='function') ? SP_T('about.error') : 'Error';
           }
         };
         xhr.onerror = function() {
           console.error('FFmpeg request failed');
-          document.getElementById('ffmpegLatestVersion').textContent = 'Indisponível';
+                    document.getElementById('ffmpegLatestVersion').textContent = (typeof SP_T==='function') ? SP_T('about.unavailable') : 'Unavailable';
         };
         xhr.ontimeout = function() {
           console.error('FFmpeg request timeout');
-          document.getElementById('ffmpegLatestVersion').textContent = 'Timeout';
+                    document.getElementById('ffmpegLatestVersion').textContent = (typeof SP_T==='function') ? SP_T('about.timeout') : 'Timeout';
         };
         xhr.send();
       }
@@ -3537,16 +3537,16 @@ app.get('/about', (req, res) => {
             updateComponentStatus('streamlink', localVersions.streamlink, version);
           } catch (e) {
             console.error('Error parsing Streamlink data:', e);
-            document.getElementById('streamlinkLatestVersion').textContent = 'Erro';
+                        document.getElementById('streamlinkLatestVersion').textContent = (typeof SP_T==='function') ? SP_T('about.error') : 'Error';
           }
         };
         xhr.onerror = function() {
           console.error('Streamlink request failed');
-          document.getElementById('streamlinkLatestVersion').textContent = 'Indisponível';
+                    document.getElementById('streamlinkLatestVersion').textContent = (typeof SP_T==='function') ? SP_T('about.unavailable') : 'Unavailable';
         };
         xhr.ontimeout = function() {
           console.error('Streamlink request timeout');
-          document.getElementById('streamlinkLatestVersion').textContent = 'Timeout';
+                    document.getElementById('streamlinkLatestVersion').textContent = (typeof SP_T==='function') ? SP_T('about.timeout') : 'Timeout';
         };
         xhr.send();
       }
@@ -3557,6 +3557,7 @@ app.get('/about', (req, res) => {
       var buttonEl = document.getElementById('updateBtn' + component.charAt(0).toUpperCase() + component.slice(1));
             var localVersion = String(local || '').trim();
             var remoteVersion = String(remote || '').trim();
+            var t = (typeof SP_T === 'function') ? SP_T : function(k){ return k; };
       
             console.log('updateComponentStatus:', {component, local: localVersion, remote: remoteVersion, statusEl: !!statusEl, buttonEl: !!buttonEl, isAdmin: !!IS_ADMIN});
       
@@ -3566,7 +3567,7 @@ app.get('/about', (req, res) => {
       }
       
             if (!/\\d+\\.\\d+/.test(localVersion)) {
-        statusEl.innerHTML = '<span class="component-status outdated">⚠️ Não instalado</span>';
+                statusEl.innerHTML = '<span class="component-status outdated">⚠️ ' + t('about.comp.not_installed') + '</span>';
         if (buttonEl && IS_ADMIN) {
           buttonEl.style.display = 'block';
         }
@@ -3574,8 +3575,8 @@ app.get('/about', (req, res) => {
       }
       
       // Se a versão remota não está disponível
-            if (remoteVersion === '?' || remoteVersion === 'Indisponível' || !/\\d+\\.\\d+/.test(remoteVersion)) {
-        statusEl.innerHTML = '<span class="component-status">✓ Instalado</span>';
+                        if (remoteVersion === '?' || !/\\d+\\.\\d+/.test(remoteVersion)) {
+                statusEl.innerHTML = '<span class="component-status">✓ ' + t('about.comp.installed') + '</span>';
         if (buttonEl) {
           buttonEl.style.display = 'none';
         }
@@ -3589,25 +3590,25 @@ app.get('/about', (req, res) => {
         
         if (comparison < 0) {
           // Versão local é menor que remota (desatualizado)
-          statusEl.innerHTML = '<span class="component-status outdated">⬆️ Desatualizado</span>';
+                    statusEl.innerHTML = '<span class="component-status outdated">⬆️ ' + t('about.comp.outdated') + '</span>';
           if (buttonEl && IS_ADMIN) {
             buttonEl.style.display = 'block';
           }
         } else if (comparison === 0) {
           // Versões iguais (atualizado)
-          statusEl.innerHTML = '<span class="component-status">✓ Atualizado</span>';
+                    statusEl.innerHTML = '<span class="component-status">✓ ' + t('about.comp.updated') + '</span>';
           if (buttonEl) {
             buttonEl.style.display = 'none';
           }
         } else {
           // Versão local é maior (versão nova)
-          statusEl.innerHTML = '<span class="component-status">✓ Versão nova</span>';
+                    statusEl.innerHTML = '<span class="component-status">✓ ' + t('about.comp.newer') + '</span>';
           if (buttonEl) {
             buttonEl.style.display = 'none';
           }
         }
       } else {
-        statusEl.innerHTML = '<span class="component-status">✓ Instalado</span>';
+                statusEl.innerHTML = '<span class="component-status">✓ ' + t('about.comp.installed') + '</span>';
         if (buttonEl) {
           buttonEl.style.display = 'none';
         }
@@ -3667,7 +3668,8 @@ app.get('/about', (req, res) => {
             status.textContent = (typeof SP_T==='function') ? SP_T('about.up_to_date') : '✅ Você está na versão mais recente.';
             if (btn) btn.style.display = 'none';
           } else {
-            status.innerHTML = '<strong>⬆️ Nova versão disponível: ' + latest + '</strong>';
+                        var newVersionText = (typeof SP_T==='function') ? SP_T('about.new_version') : '⬆️ Nova versão disponível:';
+                        status.innerHTML = '<strong>' + newVersionText + ' ' + latest + '</strong>';
             if (IS_ADMIN && btn) { btn.style.display = 'block'; }
           }
         } catch(e) {
@@ -3735,7 +3737,7 @@ app.get('/about', (req, res) => {
         ${isAdmin ? '<button onclick="updateStreamproxy()" id="aboutUpdateBtnAction" class="btn btn--primary" style="display:none;">Atualizar agora</button>' : ''}
       </div>
       
-      <h3 style="margin-top: 32px; margin-bottom: 16px;">Componentes do Sistema</h3>
+    <h3 style="margin-top: 32px; margin-bottom: 16px;" data-i18n="about.components_title">Componentes do Sistema</h3>
       <div class="about-components-grid">
         <div class="component-card">
           <div class="component-header">
@@ -3744,16 +3746,16 @@ app.get('/about', (req, res) => {
           </div>
           <div class="component-versions">
             <div class="component-version-row">
-              <span>Versão local:</span>
-              <strong id="ffmpegCurrentVersion">Carregando...</strong>
+                            <span data-i18n="about.comp.local_ver">Versão local:</span>
+                            <strong id="ffmpegCurrentVersion" data-i18n="about.loading">Carregando...</strong>
             </div>
             <div class="component-version-row">
-              <span>Versão remota:</span>
-              <strong id="ffmpegLatestVersion">Carregando...</strong>
+                            <span data-i18n="about.comp.remote_ver">Versão remota:</span>
+                            <strong id="ffmpegLatestVersion" data-i18n="about.loading">Carregando...</strong>
             </div>
           </div>
           <div class="component-buttons">
-            <button onclick="updateComponent('ffmpeg')" id="updateBtnFfmpeg" class="btn btn--primary btn-update-component" style="display:none;">Atualizar</button>
+                        <button onclick="updateComponent('ffmpeg')" id="updateBtnFfmpeg" class="btn btn--primary btn-update-component" style="display:none;" data-i18n="about.comp.update">Atualizar</button>
           </div>
         </div>
         
@@ -3764,16 +3766,16 @@ app.get('/about', (req, res) => {
           </div>
           <div class="component-versions">
             <div class="component-version-row">
-              <span>Versão local:</span>
-              <strong id="streamlinkCurrentVersion">Carregando...</strong>
+                            <span data-i18n="about.comp.local_ver">Versão local:</span>
+                            <strong id="streamlinkCurrentVersion" data-i18n="about.loading">Carregando...</strong>
             </div>
             <div class="component-version-row">
-              <span>Versão remota:</span>
-              <strong id="streamlinkLatestVersion">Carregando...</strong>
+                            <span data-i18n="about.comp.remote_ver">Versão remota:</span>
+                            <strong id="streamlinkLatestVersion" data-i18n="about.loading">Carregando...</strong>
             </div>
           </div>
           <div class="component-buttons">
-            <button onclick="updateComponent('streamlink')" id="updateBtnStreamlink" class="btn btn--primary btn-update-component" style="display:none;">Atualizar</button>
+                        <button onclick="updateComponent('streamlink')" id="updateBtnStreamlink" class="btn btn--primary btn-update-component" style="display:none;" data-i18n="about.comp.update">Atualizar</button>
           </div>
         </div>
       </div>
@@ -4616,9 +4618,9 @@ function loadconfig() {
     }
 
     if (config.ui == undefined) {
-        config.ui = { language: "en", theme: "default" };
+        config.ui = { language: "pt", theme: "default" };
     } else {
-        if (config.ui.language == undefined) config.ui.language = "en";
+        if (config.ui.language == undefined) config.ui.language = "pt";
         if (config.ui.theme == undefined) config.ui.theme = "default";
     }
 
@@ -7247,7 +7249,34 @@ function CreateMenu(auth) {
     ja:{"settings.section.general":"全般","settings.logconsole":"コンソールログ","settings.logconsole.desc":"サーバーコンソールにログを出力","settings.logweb":"Webログ","settings.logweb.desc":"/log でログを表示（ブラウザ）","settings.showerror":"ストリームにエラーを表示","settings.showerror.desc":"ストリーム出力にエラーの詳細を表示","settings.streamlinkpath":"Streamlinkパス","settings.streamlinkpath.desc":"streamlink実行ファイルのフルパス（空=自動検出）","settings.ffmpegpath":"FFmpegパス","settings.ffmpegpath.desc":"ffmpeg実行ファイルのフルパス（空=自動検出）","settings.youtubeapikey":"YouTube APIキー","settings.youtubeapikey.desc":"YouTubeチャンネルをポッドキャストに変換するためのAPIキー","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"ビデオコーデック","settings.ffmpeg.codec.desc":"トランスコードストリームのデフォルトビデオコーデック","settings.ffmpeg.format":"ビデオフォーマット","settings.ffmpeg.format.desc":"デフォルトのビデオコンテナフォーマット","settings.ffmpeg.serviceprovider":"サービスプロバイダー","settings.ffmpeg.serviceprovider.desc":"トランスコードストリームのメタデータのサービスプロバイダー名","settings.section.streamserver":"ストリームサーバー","settings.ss.startoninvoke":"アクセス時に起動","settings.ss.startoninvoke.desc":"アクセス時に停止中のストリームサーバーを自動起動","settings.ss.hidestopped":"プレイリストで停止中を非表示","settings.ss.hidestopped.desc":"M3UプレイリストでストリームサーバーM3Uを非表示","settings.ss.stoponnoconn":"接続なし時に停止","settings.ss.stoponnoconn.desc":"クライアントが接続されていない場合にサーバーを停止"}
   };
   Object.keys(SP_EXTRA3).forEach(function(l){ if(SP_TRANS[l]) Object.assign(SP_TRANS[l], SP_EXTRA3[l]); });
-  var SP_CFG = ${JSON.stringify({lang: (config.ui && config.ui.language) ? config.ui.language : 'en', theme: (config.ui && config.ui.theme) ? config.ui.theme : 'default'})};
+    var SP_EXTRA4 = {
+        pt:{
+            "about.timeout":"Tempo esgotado",
+            "about.components_title":"Componentes do Sistema",
+            "about.comp.local_ver":"Versão local:",
+            "about.comp.remote_ver":"Versão remota:",
+            "about.comp.update":"Atualizar",
+            "about.comp.not_installed":"Não instalado",
+            "about.comp.installed":"Instalado",
+            "about.comp.outdated":"Desatualizado",
+            "about.comp.updated":"Atualizado",
+            "about.comp.newer":"Versão nova"
+        },
+        en:{
+            "about.timeout":"Timeout",
+            "about.components_title":"System Components",
+            "about.comp.local_ver":"Local version:",
+            "about.comp.remote_ver":"Remote version:",
+            "about.comp.update":"Update",
+            "about.comp.not_installed":"Not installed",
+            "about.comp.installed":"Installed",
+            "about.comp.outdated":"Outdated",
+            "about.comp.updated":"Up to date",
+            "about.comp.newer":"Newer version"
+        }
+    };
+    Object.keys(SP_EXTRA4).forEach(function(l){ if(SP_TRANS[l]) Object.assign(SP_TRANS[l], SP_EXTRA4[l]); });
+    var SP_CFG = ${JSON.stringify({lang: (config.ui && config.ui.language) ? config.ui.language : 'pt', theme: (config.ui && config.ui.theme) ? config.ui.theme : 'default'})};
   var t = localStorage.getItem('sp_theme') || SP_CFG.theme;
   if (t !== 'default') document.documentElement.setAttribute('data-theme', t);
   var _spLang = localStorage.getItem('sp_lang') || SP_CFG.lang;
