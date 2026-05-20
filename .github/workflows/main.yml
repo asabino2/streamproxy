@@ -1,0 +1,16 @@
+name: List Directory
+
+on: [push]
+
+jobs:
+  list-directory:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: List directory contents
+      run: ls -laF
+    - name: view the current directory
+      run: pwd
+    - name: check if docker is installed
+      run: docker      
+   
