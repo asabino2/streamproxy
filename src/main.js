@@ -3399,16 +3399,14 @@ app.get('/about', (req, res) => {
           
           if (remoteVersions.ffmpeg && remoteVersions.ffmpeg !== '?') {
                         console.log('FFmpeg version from backend:', remoteVersions.ffmpeg);
-                        let ffmpegRemoteText = '';
+                        var ffmpegRemoteText = '';
                         if (typeof remoteVersions.ffmpeg === 'object' && remoteVersions.ffmpeg !== null) {
-                            if (remoteVersions.ffmpeg.installed && remoteVersions.ffmpeg.candidate) {
-                                ffmpegRemoteText = `Instalada: ${remoteVersions.ffmpeg.installed} | Candidata: ${remoteVersions.ffmpeg.candidate}`;
+                            if (remoteVersions.ffmpeg.candidate) {
+                                ffmpegRemoteText = remoteVersions.ffmpeg.candidate;
                             } else if (remoteVersions.ffmpeg.installed) {
-                                ffmpegRemoteText = `Instalada: ${remoteVersions.ffmpeg.installed}`;
-                            } else if (remoteVersions.ffmpeg.candidate) {
-                                ffmpegRemoteText = `Candidata: ${remoteVersions.ffmpeg.candidate}`;
+                                ffmpegRemoteText = remoteVersions.ffmpeg.installed;
                             } else if (remoteVersions.ffmpeg.error) {
-                                ffmpegRemoteText = `Erro: ${remoteVersions.ffmpeg.error}`;
+                                ffmpegRemoteText = 'Erro: ' + remoteVersions.ffmpeg.error;
                             } else {
                                 ffmpegRemoteText = '?';
                             }
