@@ -1516,121 +1516,87 @@ app.get('/api/info/remote-versions', (req, res) => {
     if (auth.authenticated == false || auth.authorized != true) {
         return false;
     }
-    
-    const https = require('https');
-    var remoteVersions = { ffmpeg: '?', streamlink: '?' };
-    var completed = 0;
 
-    function normalizeVersion(v) {
-        var m = String(v || '').match(/^(\d+)\.(\d+)(?:\.(\d+))?$/);
-        if (!m) {
-            return null;
-        }
-        return [parseInt(m[1], 10) || 0, parseInt(m[2], 10) || 0, parseInt(m[3], 10) || 0];
-    }
-
-    function compareVersionStrings(a, b) {
-        var av = normalizeVersion(a);
-        var bv = normalizeVersion(b);
-        if (!av && !bv) return 0;
-        if (!av) return -1;
-        if (!bv) return 1;
-        for (var i = 0; i < 3; i++) {
-            if (av[i] < bv[i]) return -1;
-            if (av[i] > bv[i]) return 1;
-        }
-        return 0;
-    }
-    
-    // Função auxiliar para fazer requisições HTTPS com headers
-    function fetchJSON(url) {
-        return new Promise((resolve, reject) => {
-            var options = {
-                headers: {
-                    'Accept': 'application/vnd.github.v3+json',
-                    'User-Agent': 'StreamProxy'
-                }
-            };
-            
-            https.get(url, options, (res) => {
-                let data = '';
-                res.on('data', chunk => data += chunk);
-                res.on('end', () => {
-                    try {
-                        resolve(JSON.parse(data));
-                    } catch (e) {
-                        reject(e);
-                    }
-                });
-            }).on('error', reject);
+    // Só executa em sistemas Linux
+    if (os.platform() === 'win32') {
+        return res.json({
+            ffmpeg: {
+                installed: '?',
+                candidate: '?',
+                error: 'Comando apt policy ffmpeg não disponível no Windows.'
+            },
+            streamlink: '?'
         });
     }
-    
-    // Get FFmpeg version (FFmpeg publishes tags, not GitHub releases)
-    fetchJSON('https://api.github.com/repos/FFmpeg/FFmpeg/tags?per_page=30')
-        .then(data => {
-            if (data && Array.isArray(data)) {
-                var best = null;
-                for (var i = 0; i < data.length; i++) {
-                    var release = data[i];
-                    var tag = release && (release.tag_name || release.name);
-                    if (tag) {
-                        log("Checking FFmpeg tag: " + tag);
-                        // FFmpeg stable tags follow format "nX.Y" or "nX.Y.Z"
-                        var match = tag.match(/^n(\d+\.\d+(?:\.\d+)?)$/);
-                        if (match) {
-                            var candidate = match[1];
-                            if (!best || compareVersionStrings(candidate, best) > 0) {
-                                best = candidate;
+
+    const { exec } = require('child_process');
+    exec('apt policy ffmpeg', (error, stdout, stderr) => {
+        let ffmpegInfo = { installed: '?', candidate: '?', error: null };
+        if (error) {
+            ffmpegInfo.error = stderr || error.message;
+        } else {
+            // Exemplo de saída:
+            //  Installed: 7:4.3.1-6ubuntu1
+            //  Candidate: 7:4.4.2-0ubuntu0.22.04.1
+            const installedMatch = stdout.match(/Installed:\s*([\w:.-]+)/);
+            const candidateMatch = stdout.match(/Candidate:\s*([\w:.-]+)/);
+            if (installedMatch) ffmpegInfo.installed = installedMatch[1];
+            if (candidateMatch) ffmpegInfo.candidate = candidateMatch[1];
+        }
+
+        // Streamlink: mantém lógica antiga (GitHub)
+        const https = require('https');
+        function fetchJSON(url) {
+            return new Promise((resolve, reject) => {
+                var options = {
+                    headers: {
+                        'Accept': 'application/vnd.github.v3+json',
+                        'User-Agent': 'StreamProxy'
+                    }
+                };
+                https.get(url, options, (res) => {
+                    let data = '';
+                    res.on('data', chunk => data += chunk);
+                    res.on('end', () => {
+                        try {
+                            resolve(JSON.parse(data));
+                        } catch (e) {
+                            reject(e);
+                        }
+                    });
+                }).on('error', reject);
+            });
+        }
+
+        fetchJSON('https://api.github.com/repos/streamlink/streamlink/releases?per_page=30')
+            .then(data => {
+                let streamlinkVersion = '?';
+                if (data && Array.isArray(data)) {
+                    for (var i = 0; i < data.length; i++) {
+                        var release = data[i];
+                        if (release.tag_name && !release.draft) {
+                            var tag = release.tag_name;
+                            var match = tag.match(/v?(\d+\.\d+\.\d+)/);
+                            if (match) {
+                                streamlinkVersion = match[1];
+                                break;
                             }
                         }
                     }
                 }
-                if (best) {
-                    remoteVersions.ffmpeg = best;
-                    log("FFmpeg version found: " + remoteVersions.ffmpeg);
-                }
-            }
-        })
-        .catch(e => {
-            log("Error fetching FFmpeg version: " + e.message);
-        })
-        .finally(() => {
-            completed++;
-            if (completed === 2) {
-                res.json(remoteVersions);
-            }
-        });
-    
-    // Get Streamlink version
-    fetchJSON('https://api.github.com/repos/streamlink/streamlink/releases?per_page=30')
-        .then(data => {
-            if (data && Array.isArray(data)) {
-                for (var i = 0; i < data.length; i++) {
-                    var release = data[i];
-                    if (release.tag_name && !release.draft) {
-                        var tag = release.tag_name;
-                        log("Checking Streamlink release tag: " + tag);
-                        // Streamlink uses tag format like "v8.4.0"
-                        var match = tag.match(/v?(\d+\.\d+\.\d+)/);
-                        if (match) {
-                            remoteVersions.streamlink = match[1];
-                            log("Streamlink version found: " + remoteVersions.streamlink);
-                            break;
-                        }
-                    }
-                }
-            }
-        })
-        .catch(e => {
-            log("Error fetching Streamlink version: " + e.message);
-        })
-        .finally(() => {
-            completed++;
-            if (completed === 2) {
-                res.json(remoteVersions);
-            }
-        });
+                res.json({
+                    ffmpeg: ffmpegInfo,
+                    streamlink: streamlinkVersion
+                });
+            })
+            .catch(e => {
+                res.json({
+                    ffmpeg: ffmpegInfo,
+                    streamlink: '?',
+                    error: e.message
+                });
+            });
+    });
 });
 
 // Endpoint para atualizar o streamproxy (git pull + restart)
