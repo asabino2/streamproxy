@@ -1510,6 +1510,129 @@ app.get('/api/info/versions', (req, res) => {
     res.json(info);
 });
 
+// Endpoint para obter versões remotas (latest versions from GitHub)
+app.get('/api/info/remote-versions', (req, res) => {
+    var auth = basicAuth(req, res);
+    if (auth.authenticated == false || auth.authorized != true) {
+        return false;
+    }
+    
+    const https = require('https');
+    var remoteVersions = { ffmpeg: '?', streamlink: '?' };
+    var completed = 0;
+
+    function normalizeVersion(v) {
+        var m = String(v || '').match(/^(\d+)\.(\d+)(?:\.(\d+))?$/);
+        if (!m) {
+            return null;
+        }
+        return [parseInt(m[1], 10) || 0, parseInt(m[2], 10) || 0, parseInt(m[3], 10) || 0];
+    }
+
+    function compareVersionStrings(a, b) {
+        var av = normalizeVersion(a);
+        var bv = normalizeVersion(b);
+        if (!av && !bv) return 0;
+        if (!av) return -1;
+        if (!bv) return 1;
+        for (var i = 0; i < 3; i++) {
+            if (av[i] < bv[i]) return -1;
+            if (av[i] > bv[i]) return 1;
+        }
+        return 0;
+    }
+    
+    // Função auxiliar para fazer requisições HTTPS com headers
+    function fetchJSON(url) {
+        return new Promise((resolve, reject) => {
+            var options = {
+                headers: {
+                    'Accept': 'application/vnd.github.v3+json',
+                    'User-Agent': 'StreamProxy'
+                }
+            };
+            
+            https.get(url, options, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                    try {
+                        resolve(JSON.parse(data));
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
+            }).on('error', reject);
+        });
+    }
+    
+    // Get FFmpeg version (FFmpeg publishes tags, not GitHub releases)
+    fetchJSON('https://api.github.com/repos/FFmpeg/FFmpeg/tags?per_page=30')
+        .then(data => {
+            if (data && Array.isArray(data)) {
+                var best = null;
+                for (var i = 0; i < data.length; i++) {
+                    var release = data[i];
+                    var tag = release && (release.tag_name || release.name);
+                    if (tag) {
+                        log("Checking FFmpeg tag: " + tag);
+                        // FFmpeg stable tags follow format "nX.Y" or "nX.Y.Z"
+                        var match = tag.match(/^n(\d+\.\d+(?:\.\d+)?)$/);
+                        if (match) {
+                            var candidate = match[1];
+                            if (!best || compareVersionStrings(candidate, best) > 0) {
+                                best = candidate;
+                            }
+                        }
+                    }
+                }
+                if (best) {
+                    remoteVersions.ffmpeg = best;
+                    log("FFmpeg version found: " + remoteVersions.ffmpeg);
+                }
+            }
+        })
+        .catch(e => {
+            log("Error fetching FFmpeg version: " + e.message);
+        })
+        .finally(() => {
+            completed++;
+            if (completed === 2) {
+                res.json(remoteVersions);
+            }
+        });
+    
+    // Get Streamlink version
+    fetchJSON('https://api.github.com/repos/streamlink/streamlink/releases?per_page=30')
+        .then(data => {
+            if (data && Array.isArray(data)) {
+                for (var i = 0; i < data.length; i++) {
+                    var release = data[i];
+                    if (release.tag_name && !release.draft) {
+                        var tag = release.tag_name;
+                        log("Checking Streamlink release tag: " + tag);
+                        // Streamlink uses tag format like "v8.4.0"
+                        var match = tag.match(/v?(\d+\.\d+\.\d+)/);
+                        if (match) {
+                            remoteVersions.streamlink = match[1];
+                            log("Streamlink version found: " + remoteVersions.streamlink);
+                            break;
+                        }
+                    }
+                }
+            }
+        })
+        .catch(e => {
+            log("Error fetching Streamlink version: " + e.message);
+        })
+        .finally(() => {
+            completed++;
+            if (completed === 2) {
+                res.json(remoteVersions);
+            }
+        });
+});
+
 // Endpoint para atualizar o streamproxy (git pull + restart)
 app.post('/api/system/update-streamproxy', (req, res) => {
     res.header('Access-Control-Allow-Origin', req.headers.origin || '');
@@ -3263,90 +3386,287 @@ app.get('/about', (req, res) => {
       xhr.onload = function() {
         try {
           var info = JSON.parse(xhr.responseText);
-          localVersions = info.versions;
+          console.log('Local versions loaded:', info.versions);
+          localVersions = info.versions || {};
           
           // Update FFmpeg
-          document.getElementById('ffmpegCurrentVersion').textContent = info.versions.ffmpeg || 'Não instalado';
+          var ffmpegVersion = localVersions.ffmpeg || 'Não instalado';
+          document.getElementById('ffmpegCurrentVersion').textContent = ffmpegVersion;
+          console.log('FFmpeg local version set to:', ffmpegVersion);
+          
           // Update Streamlink
-          document.getElementById('streamlinkCurrentVersion').textContent = info.versions.streamlink || 'Não instalado';
+          var streamlinkVersion = localVersions.streamlink || 'Não instalado';
+          document.getElementById('streamlinkCurrentVersion').textContent = streamlinkVersion;
+          console.log('Streamlink local version set to:', streamlinkVersion);
           
           loadRemoteComponentVersions();
         } catch (e) {
           console.error('Erro ao carregar versões locais:', e);
+          loadRemoteComponentVersions();
         }
       };
       xhr.onerror = function() {
-        console.error('Erro ao conectar ao servidor');
+        console.error('Erro ao conectar ao servidor para versões locais');
+        loadRemoteComponentVersions();
       };
       xhr.send();
     }
     
     function loadRemoteComponentVersions() {
-      // FFmpeg version
-      fetch('https://api.github.com/repos/FFmpeg/FFmpeg/releases?per_page=1')
-        .then(r => r.json())
-        .then(data => {
-          var version = data[0]?.tag_name?.replace(/^v/, '') || '?';
-          document.getElementById('ffmpegLatestVersion').textContent = version;
-          updateComponentStatus('ffmpeg', localVersions.ffmpeg, version);
-        })
-        .catch(e => {
-          document.getElementById('ffmpegLatestVersion').textContent = 'Indisponível';
-        });
+      console.log('loadRemoteComponentVersions started');
       
-      // Streamlink version
-      fetch('https://api.github.com/repos/streamlink/streamlink/releases?per_page=1')
-        .then(r => r.json())
-        .then(data => {
-          var version = data[0]?.tag_name?.replace(/^v/, '') || '?';
-          document.getElementById('streamlinkLatestVersion').textContent = version;
-          updateComponentStatus('streamlink', localVersions.streamlink, version);
-        })
-        .catch(e => {
+      // First try to get from backend endpoint
+      var xhrBackend = new XMLHttpRequest();
+      xhrBackend.open('GET', '/api/info/remote-versions');
+      xhrBackend.timeout = 5000;
+      xhrBackend.onload = function() {
+        try {
+                    if (xhrBackend.status < 200 || xhrBackend.status >= 300) {
+                        console.error('Backend request returned status:', xhrBackend.status);
+                        fetchFFmpegVersion();
+                        fetchStreamlinkVersion();
+                        return;
+                    }
+
+          var remoteVersions = JSON.parse(xhrBackend.responseText);
+          console.log('Remote versions from backend:', remoteVersions);
+          
+          if (remoteVersions.ffmpeg && remoteVersions.ffmpeg !== '?') {
+            console.log('FFmpeg version from backend:', remoteVersions.ffmpeg);
+            document.getElementById('ffmpegLatestVersion').textContent = remoteVersions.ffmpeg;
+            updateComponentStatus('ffmpeg', localVersions.ffmpeg, remoteVersions.ffmpeg);
+          } else {
+                        // Fallback only for FFmpeg when backend cannot resolve
+                        fetchFFmpegVersion();
+          }
+          
+          if (remoteVersions.streamlink && remoteVersions.streamlink !== '?') {
+            console.log('Streamlink version from backend:', remoteVersions.streamlink);
+            document.getElementById('streamlinkLatestVersion').textContent = remoteVersions.streamlink;
+            updateComponentStatus('streamlink', localVersions.streamlink, remoteVersions.streamlink);
+          } else {
+                        // Fallback only for Streamlink when backend cannot resolve
+                        fetchStreamlinkVersion();
+          }
+        } catch (e) {
+          console.error('Error parsing backend response:', e);
+                    fetchFFmpegVersion();
+                    fetchStreamlinkVersion();
+        }
+      };
+      xhrBackend.onerror = function() {
+        console.error('Backend request failed, trying direct GitHub API');
+                fetchFFmpegVersion();
+                fetchStreamlinkVersion();
+      };
+      xhrBackend.ontimeout = function() {
+        console.error('Backend request timeout, trying direct GitHub API');
+                fetchFFmpegVersion();
+                fetchStreamlinkVersion();
+      };
+      xhrBackend.send();
+      
+      function fetchFFmpegVersion() {
+        var xhr = new XMLHttpRequest();
+                xhr.open('GET', 'https://api.github.com/repos/FFmpeg/FFmpeg/tags?per_page=30');
+        xhr.timeout = 5000;
+        xhr.setRequestHeader('Accept', 'application/vnd.github.v3+json');
+        xhr.onload = function() {
+          console.log('FFmpeg response received, status:', xhr.status);
+          try {
+            var data = JSON.parse(xhr.responseText);
+            var version = '?';
+            
+            if (Array.isArray(data) && data.length > 0) {
+                            var best = null;
+              for (var i = 0; i < data.length; i++) {
+                var release = data[i];
+                                if (release) {
+                                    var tag = release.tag_name || release.name;
+                                    if (!tag) {
+                                        continue;
+                                    }
+                  console.log('Checking FFmpeg tag:', tag);
+                  
+                                    // FFmpeg stable tags follow format "nX.Y" or "nX.Y.Z"
+                                    var match = tag.match(/^n(\\d+\\.\\d+(?:\\.\\d+)?)$/);
+                  if (match) {
+                                        var candidate = match[1];
+                                        if (!best || compareVersions(candidate, best) > 0) {
+                                            best = candidate;
+                                        }
+                  }
+                }
+              }
+                            if (best) {
+                                version = best;
+                                console.log('FFmpeg version found:', version);
+                            }
+            }
+            
+            console.log('Final FFmpeg version:', version);
+            document.getElementById('ffmpegLatestVersion').textContent = version;
+            updateComponentStatus('ffmpeg', localVersions.ffmpeg, version);
+          } catch (e) {
+            console.error('Error parsing FFmpeg data:', e);
+            document.getElementById('ffmpegLatestVersion').textContent = 'Erro';
+          }
+        };
+        xhr.onerror = function() {
+          console.error('FFmpeg request failed');
+          document.getElementById('ffmpegLatestVersion').textContent = 'Indisponível';
+        };
+        xhr.ontimeout = function() {
+          console.error('FFmpeg request timeout');
+          document.getElementById('ffmpegLatestVersion').textContent = 'Timeout';
+        };
+        xhr.send();
+      }
+      
+      function fetchStreamlinkVersion() {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', 'https://api.github.com/repos/streamlink/streamlink/releases?per_page=20');
+        xhr.timeout = 5000;
+        xhr.setRequestHeader('Accept', 'application/vnd.github.v3+json');
+        xhr.onload = function() {
+          console.log('Streamlink response received, status:', xhr.status);
+          try {
+            var data = JSON.parse(xhr.responseText);
+            var version = '?';
+            
+            if (Array.isArray(data) && data.length > 0) {
+              for (var i = 0; i < data.length; i++) {
+                var release = data[i];
+                if (release && release.tag_name && !release.draft) {
+                  var tag = release.tag_name;
+                  console.log('Checking Streamlink tag:', tag);
+                  
+                  // Try to extract version number
+                                    var match = tag.match(/^v?(\\d+\\.\\d+\\.\\d+)$/);
+                  if (match) {
+                    version = match[1];
+                    console.log('Streamlink version found:', version);
+                    break;
+                  }
+                }
+              }
+            }
+            
+            console.log('Final Streamlink version:', version);
+            document.getElementById('streamlinkLatestVersion').textContent = version;
+            updateComponentStatus('streamlink', localVersions.streamlink, version);
+          } catch (e) {
+            console.error('Error parsing Streamlink data:', e);
+            document.getElementById('streamlinkLatestVersion').textContent = 'Erro';
+          }
+        };
+        xhr.onerror = function() {
+          console.error('Streamlink request failed');
           document.getElementById('streamlinkLatestVersion').textContent = 'Indisponível';
-        });
+        };
+        xhr.ontimeout = function() {
+          console.error('Streamlink request timeout');
+          document.getElementById('streamlinkLatestVersion').textContent = 'Timeout';
+        };
+        xhr.send();
+      }
     }
     
     function updateComponentStatus(component, local, remote) {
       var statusEl = document.getElementById(component + 'Status');
-      var statusLabelEl = document.getElementById(component + 'StatusLabel');
       var buttonEl = document.getElementById('updateBtn' + component.charAt(0).toUpperCase() + component.slice(1));
+            var localVersion = String(local || '').trim();
+            var remoteVersion = String(remote || '').trim();
       
-      if (!statusEl) return;
+            console.log('updateComponentStatus:', {component, local: localVersion, remote: remoteVersion, statusEl: !!statusEl, buttonEl: !!buttonEl, isAdmin: !!IS_ADMIN});
       
-      if (!local || local === '') {
+      if (!statusEl) {
+        console.warn('Status element not found for', component);
+        return;
+      }
+      
+            if (!/\\d+\\.\\d+/.test(localVersion)) {
         statusEl.innerHTML = '<span class="component-status outdated">⚠️ Não instalado</span>';
-        if (buttonEl && IS_ADMIN) buttonEl.classList.remove('hidden');
+        if (buttonEl && IS_ADMIN) {
+          buttonEl.style.display = 'block';
+        }
         return;
       }
       
-      if (remote === '?' || remote === 'Indisponível') {
+      // Se a versão remota não está disponível
+            if (remoteVersion === '?' || remoteVersion === 'Indisponível' || !/\\d+\\.\\d+/.test(remoteVersion)) {
         statusEl.innerHTML = '<span class="component-status">✓ Instalado</span>';
+        if (buttonEl) {
+          buttonEl.style.display = 'none';
+        }
         return;
       }
       
-      var comparison = compareVersions(local, remote);
-      if (comparison < 0) {
-        statusEl.innerHTML = '<span class="component-status outdated">⬆️ Desatualizado</span>';
-        if (buttonEl && IS_ADMIN) buttonEl.classList.remove('hidden');
-      } else if (comparison === 0) {
-        statusEl.innerHTML = '<span class="component-status">✓ Atualizado</span>';
-        if (buttonEl) buttonEl.classList.add('hidden');
+      // Se conseguiu obter a versão remota, comparar
+            if (/\\d+\\.\\d+/.test(remoteVersion)) {
+                var comparison = compareVersions(localVersion, remoteVersion);
+                console.log('Version comparison result:', {local: localVersion, remote: remoteVersion, comparison});
+        
+        if (comparison < 0) {
+          // Versão local é menor que remota (desatualizado)
+          statusEl.innerHTML = '<span class="component-status outdated">⬆️ Desatualizado</span>';
+          if (buttonEl && IS_ADMIN) {
+            buttonEl.style.display = 'block';
+          }
+        } else if (comparison === 0) {
+          // Versões iguais (atualizado)
+          statusEl.innerHTML = '<span class="component-status">✓ Atualizado</span>';
+          if (buttonEl) {
+            buttonEl.style.display = 'none';
+          }
+        } else {
+          // Versão local é maior (versão nova)
+          statusEl.innerHTML = '<span class="component-status">✓ Versão nova</span>';
+          if (buttonEl) {
+            buttonEl.style.display = 'none';
+          }
+        }
       } else {
-        statusEl.innerHTML = '<span class="component-status">✓ Versão nova</span>';
-        if (buttonEl) buttonEl.classList.add('hidden');
+        statusEl.innerHTML = '<span class="component-status">✓ Instalado</span>';
+        if (buttonEl) {
+          buttonEl.style.display = 'none';
+        }
       }
     }
     
     function compareVersions(a, b) {
-      var av = (a || '0').split('.').map(Number);
-      var bv = (b || '0').split('.').map(Number);
-      for (var i = 0; i < Math.max(av.length, bv.length); i++) {
-        var ap = av[i] || 0;
-        var bp = bv[i] || 0;
-        if (ap < bp) return -1;
-        if (ap > bp) return 1;
+      // Normalize versions to arrays of numbers
+      var normalize = function(v) {
+        if (!v) return [0, 0, 0];
+        // Extract numeric parts: "5.1.2-beta" -> "5.1.2"
+        var match = String(v).match(/(\\d+)\\.(\\d+)(?:\\.(\\d+))?/);
+        if (match) {
+          return [
+            parseInt(match[1]) || 0,
+            parseInt(match[2]) || 0,
+            parseInt(match[3]) || 0
+          ];
+        }
+        return [0, 0, 0];
+      };
+      
+      var av = normalize(a);
+      var bv = normalize(b);
+      
+      console.log('compareVersions:', {a, b, av, bv});
+      
+      // Compare major, minor, patch
+      for (var i = 0; i < 3; i++) {
+        if (av[i] < bv[i]) {
+          console.log('  result: -1 (a is older)');
+          return -1;
+        }
+        if (av[i] > bv[i]) {
+          console.log('  result: 1 (a is newer)');
+          return 1;
+        }
       }
+      console.log('  result: 0 (equal)');
       return 0;
     }
     
@@ -3365,10 +3685,10 @@ app.get('/about', (req, res) => {
           wrap.style.display = 'flex';
           if (latest === CURRENT_VERSION) {
             status.textContent = (typeof SP_T==='function') ? SP_T('about.up_to_date') : '✅ Você está na versão mais recente.';
-            if (btn) btn.classList.add('hidden');
+            if (btn) btn.style.display = 'none';
           } else {
             status.innerHTML = '<strong>⬆️ Nova versão disponível: ' + latest + '</strong>';
-            if (IS_ADMIN && btn) { btn.classList.remove('hidden'); }
+            if (IS_ADMIN && btn) { btn.style.display = 'block'; }
           }
         } catch(e) {
           document.getElementById('aboutLatestVersion').textContent = (typeof SP_T==='function') ? SP_T('about.error') : 'Erro';
@@ -3432,7 +3752,7 @@ app.get('/about', (req, res) => {
       </div>
       <div id="aboutUpdateWrap" class="about-update-wrap" style="display:none">
         <span id="aboutUpdateStatus" class="about-update-status"></span>
-        ${isAdmin ? '<button onclick="updateStreamproxy()" id="aboutUpdateBtnAction" class="btn btn--primary hidden">Atualizar agora</button>' : ''}
+        ${isAdmin ? '<button onclick="updateStreamproxy()" id="aboutUpdateBtnAction" class="btn btn--primary" style="display:none;">Atualizar agora</button>' : ''}
       </div>
       
       <h3 style="margin-top: 32px; margin-bottom: 16px;">Componentes do Sistema</h3>
@@ -3453,7 +3773,7 @@ app.get('/about', (req, res) => {
             </div>
           </div>
           <div class="component-buttons">
-            <button onclick="updateComponent('ffmpeg')" id="updateBtnFfmpeg" class="btn btn--primary btn-update-component hidden">Atualizar</button>
+            <button onclick="updateComponent('ffmpeg')" id="updateBtnFfmpeg" class="btn btn--primary btn-update-component" style="display:none;">Atualizar</button>
           </div>
         </div>
         
@@ -3473,7 +3793,7 @@ app.get('/about', (req, res) => {
             </div>
           </div>
           <div class="component-buttons">
-            <button onclick="updateComponent('streamlink')" id="updateBtnStreamlink" class="btn btn--primary btn-update-component hidden">Atualizar</button>
+            <button onclick="updateComponent('streamlink')" id="updateBtnStreamlink" class="btn btn--primary btn-update-component" style="display:none;">Atualizar</button>
           </div>
         </div>
       </div>

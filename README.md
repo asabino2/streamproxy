@@ -21,11 +21,42 @@ With Streamproxy you can watch livestreams from YouTube, Twitch (and any other s
 - ProgTV
 - and others
 
+Current release: **2.0.3**
+
 To start the server, run from command prompt:
 
 ```bash
 streamproxy
 ```
+
+---
+
+## 🧩 Google Chrome extension (StreamProxy Quick Add)
+
+This repository includes a Chrome extension in `chrome-extension-streamproxy` that helps you add the current tab URL as a StreamServer in StreamProxy.
+
+### Install in Google Chrome (recommended)
+
+1. Open `chrome://extensions`.
+2. Enable **Developer mode** (top right).
+3. Click **Load unpacked**.
+4. Select the `chrome-extension-streamproxy` folder from this repository.
+5. Pin the extension and open its options page.
+6. Configure StreamProxy URL (example: `http://127.0.0.1:4211`) and, if needed, Basic Auth credentials.
+
+### Optional: install from packaged file
+
+- A packaged file may be available as `chrome-extension-streamproxy.crx`.
+- Depending on your Chrome policy/version, direct CRX install can be blocked.
+- If blocked, use the **Load unpacked** method above.
+
+### Basic usage
+
+1. Open a stream page in Chrome.
+2. Click the extension icon.
+3. Review the fields and click **Add streamserver**.
+
+> If StreamProxy Basic Auth is enabled, use an account with permission for `POST /api/streamserver`.
 
 ---
 
