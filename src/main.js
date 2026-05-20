@@ -3398,9 +3398,25 @@ app.get('/about', (req, res) => {
           console.log('Remote versions from backend:', remoteVersions);
           
           if (remoteVersions.ffmpeg && remoteVersions.ffmpeg !== '?') {
-            console.log('FFmpeg version from backend:', remoteVersions.ffmpeg);
-            document.getElementById('ffmpegLatestVersion').textContent = remoteVersions.ffmpeg;
-            updateComponentStatus('ffmpeg', localVersions.ffmpeg, remoteVersions.ffmpeg);
+                        console.log('FFmpeg version from backend:', remoteVersions.ffmpeg);
+                        let ffmpegRemoteText = '';
+                        if (typeof remoteVersions.ffmpeg === 'object' && remoteVersions.ffmpeg !== null) {
+                            if (remoteVersions.ffmpeg.installed && remoteVersions.ffmpeg.candidate) {
+                                ffmpegRemoteText = `Instalada: ${remoteVersions.ffmpeg.installed} | Candidata: ${remoteVersions.ffmpeg.candidate}`;
+                            } else if (remoteVersions.ffmpeg.installed) {
+                                ffmpegRemoteText = `Instalada: ${remoteVersions.ffmpeg.installed}`;
+                            } else if (remoteVersions.ffmpeg.candidate) {
+                                ffmpegRemoteText = `Candidata: ${remoteVersions.ffmpeg.candidate}`;
+                            } else if (remoteVersions.ffmpeg.error) {
+                                ffmpegRemoteText = `Erro: ${remoteVersions.ffmpeg.error}`;
+                            } else {
+                                ffmpegRemoteText = '?';
+                            }
+                        } else {
+                            ffmpegRemoteText = remoteVersions.ffmpeg;
+                        }
+                        document.getElementById('ffmpegLatestVersion').textContent = ffmpegRemoteText;
+                        updateComponentStatus('ffmpeg', localVersions.ffmpeg, ffmpegRemoteText);
           } else {
                         // Fallback only for FFmpeg when backend cannot resolve
                         fetchFFmpegVersion();
