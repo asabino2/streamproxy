@@ -388,7 +388,7 @@ app.get('/videostream/ffmpeg', (req, res) => {
     }
 
     if (req.query.headers != undefined) {
-        headers = `"${req.query.headers}"`;
+        headers = `${req.query.headers}`;
     }
 
     if (req.query.framerate != undefined) {
