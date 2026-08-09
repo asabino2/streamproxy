@@ -583,6 +583,10 @@ If you find this app useful, please consider donating to support development.
 
 ## 📝 Changelog
 
+### 2.0.5
+
+- Fixed duplicate HTTP response attempts during streamserver creation flow, preventing repeated ERR_HTTP_HEADERS_SENT crashes when Streamlink writes multiple stderr lines.
+
 ### 2.0.4
 
 - Added support for passing request headers to FFmpeg through a dedicated headers parameter.

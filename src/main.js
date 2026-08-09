@@ -5286,6 +5286,10 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
     var chnumber = undefined;
     var radio = false;
 
+    function canWriteResponse() {
+        return !res.headersSent && !res.writableEnded;
+    }
+
     url = req.query.url;
     url = encodeURI(url); // prevent Remote Code Execution via arbitrary command in url
 
@@ -5453,10 +5457,12 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
         debug.lastConsoleData.stdErr = data.toString();
 
         log(data.toString());
-        var haserror = stderrmsg.indexOf("error");
-        removeStreamServer(stream.pid, streamserver);
+        var haserror = stderrmsg.toLowerCase().indexOf("error") > -1;
+        if (haserror && isStreamServer == true) {
+            removeStreamServer(stream.pid, streamserver);
+        }
 
-        if (showErrorInStream == true && haserror > -1) {
+        if (showErrorInStream == true && haserror && canWriteResponse()) {
             if (msgsplit.length > 0) {
                 // var msgtodisplay = msgsplit[1].substring(7, 30)
             } else {
@@ -5471,7 +5477,7 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
             streamerror.stdout.pipe(res);
         }
 
-        if (isStreamServer == true) {
+        if (isStreamServer == true && haserror && canWriteResponse()) {
             html += `<h1>Stream Server creation not successfully</h1><br>
             <p></p>
             <p> Message returned : <b><font color="red">${stderrmsg}</font></b></p>
@@ -5519,11 +5525,15 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
         if (isStreamServer == true) {
             html += `<h1>Stream Server creation not successfully</h1><br>
             <p></p>
-            <p> Message returned : <b><font color="red">${error}</font></b></p>
+            <p> Message returned : <b><font color="red">${err}</font></b></p>
             `
-            res.send(html);
+            if (canWriteResponse()) {
+                res.status(500).send(html);
+            }
         } else {
-            res.status(500).send("<h2>Error on calling streamlink app</h2><br>" + err)
+            if (canWriteResponse()) {
+                res.status(500).send("<h2>Error on calling streamlink app</h2><br>" + err)
+            }
         }
 
     })
