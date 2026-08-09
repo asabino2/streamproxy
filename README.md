@@ -21,7 +21,7 @@ With Streamproxy you can watch livestreams from YouTube, Twitch (and any other s
 - ProgTV
 - and others
 
-Current release: **2.0.4**
+Current release: **2.0.6**
 
 To start the server, run from command prompt:
 
