@@ -21,7 +21,7 @@ With Streamproxy you can watch livestreams from YouTube, Twitch (and any other s
 - ProgTV
 - and others
 
-Current release: **2.0.3**
+Current release: **2.0.4**
 
 To start the server, run from command prompt:
 
@@ -578,3 +578,12 @@ If you find this app useful, please consider donating to support development.
 - Streamproxy supports dynamic streamserver sessions and multi-client streaming over one source.
 - Some endpoints are Linux-only due to streamlink/transcoding compatibility.
 - Use `/status` to monitor and terminate background processes.
+
+---
+
+## 📝 Changelog
+
+### 2.0.4
+
+- Added support for passing request headers to FFmpeg through a dedicated headers parameter.
+- This FFmpeg headers parameter feature is experimental and may change in future releases.

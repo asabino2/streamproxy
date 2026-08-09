@@ -335,6 +335,7 @@ app.get('/videostream/ffmpeg', (req, res) => {
     var framerate = undefined;
     var service_provider = undefined;
     var service_name = undefined;
+    var headers = undefined;
 
     if (req.query.videocodec != undefined) {
         vcodec = encodeURI(req.query.videocodec);
@@ -386,6 +387,10 @@ app.get('/videostream/ffmpeg', (req, res) => {
         framesize = encodeURI(req.query.framesize);
     }
 
+    if (req.query.headers != undefined) {
+        headers = `"${req.query.headers}"`;
+    }
+
     if (req.query.framerate != undefined) {
         framerate = encodeURI(req.query.framerate);
     }
@@ -393,8 +398,15 @@ app.get('/videostream/ffmpeg', (req, res) => {
     var ffmpegparams = [];
     ffmpegparams.push('-loglevel');
     ffmpegparams.push('error');
+    if (headers != undefined) {
+        ffmpegparams.push('-headers');
+        
+        ffmpegparams.push(headers);
+        
+    }    
     ffmpegparams.push('-i');
     ffmpegparams.push(url);
+
     if (vcodec != undefined) {
         ffmpegparams.push('-vcodec');
         ffmpegparams.push(vcodec);
@@ -415,7 +427,7 @@ app.get('/videostream/ffmpeg', (req, res) => {
         ffmpegparams.push(framerate);
     }
 
-
+   
     ffmpegparams.push('-b');
     ffmpegparams.push(bitrates);
     ffmpegparams.push('-strict');
@@ -1351,7 +1363,7 @@ app.put('/api/streamserver', (req, res) => {
 
         if (mystreamserverindex >= 0) {
             /* save the existent fields - using safeMerge to prevent prototype pollution */
-            var allowedStreamServerKeys = ['streamname', 'streamdescription', 'channelnumber', 'logourl', 'url', 'streammethod', 'type', 'streamprovider', 'videoformat', 'videocodec', 'framesize', 'framerate', 'audiocodec', 'title', 'bitrate', 'service_provider'];
+            var allowedStreamServerKeys = ['streamname', 'streamdescription', 'channelnumber', 'logourl', 'url', 'streammethod', 'type', 'streamprovider', 'videoformat', 'videocodec', 'framesize', 'framerate', 'audiocodec', 'title', 'bitrate', 'service_provider', 'headers'];
             safeMerge(arrstreamserverlist[mystreamserverindex], mystreamserver, allowedStreamServerKeys);
             log(`Streamserver ${mystreamserver.streamname} fields updated via safeMerge`);
             //arrstreamserverlist[mystreamserverindex] = mystreamserver
@@ -5702,6 +5714,7 @@ function startStreamServer(streamname, req) {
         var bitrate = mystreamserver.bitrate;
         var channelnumber = mystreamserver.channelnumber;
         var title = mystreamserver.title;
+        var myheaders = mystreamserver.headers;
         var hasError = false;
         var response = { status: 200, json: {} };
 
@@ -5753,6 +5766,12 @@ function startStreamServer(streamname, req) {
             bitrate = "";
         } else {
             bitrate = "&bitrate=" + bitrate;
+        }
+
+        if (myheaders == "" || myheaders == undefined) {
+            myheaders = "";
+        } else {
+            myheaders = "&headers=" + encodeURI(myheaders);
         }
 
         /*
@@ -5812,7 +5831,7 @@ function startStreamServer(streamname, req) {
 
 
 
-        urltocall = "http://localhost:" + config.port + streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title + bitrate;
+        urltocall = "http://localhost:" + config.port + streammethod + "?url=" + url + myheaders + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title + bitrate;
 
         const http = require("http");
         var options = {};
@@ -5834,7 +5853,7 @@ function startStreamServer(streamname, req) {
 
         options = {
             port: config.port,
-            path: streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title,
+            path: streammethod + "?url=" + url + myheaders + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title,
             headers: { systemAuthorization: userpass }
         }
 
@@ -5955,7 +5974,7 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
 
 
     if (actualdata == undefined) {
-        actualdata = { streamname: "", streamdescription: "", streamdescription: "", channelnumber: "", logourl: "", streammethod: "/videostream/streamlink", streamprovider: "", videoformat: "", videocodec: "", framesize: "", framerate: "", audiocodec: "", title: "", url: "", bitrate: "2000k" }
+        actualdata = { streamname: "", streamdescription: "", streamdescription: "", channelnumber: "", logourl: "", streammethod: "/videostream/streamlink", streamprovider: "", videoformat: "", videocodec: "", framesize: "", framerate: "", audiocodec: "", title: "", url: "", bitrate: "2000k", audiocodec: "aac", headers: "" };
 
     }
 
@@ -5985,6 +6004,7 @@ function mountStreamServerAdminPage(req, res, method = "POST", actualdata) {
                     { name: "framerate", description: "Frame rate", required: false, type: "choice", default: actualdata.framerate, values: [{ description: "Auto (copy from original video)", value: "" }, { description: "10fps", value: "10" }, { description: "15fps", value: "15" }, { description: "24fps", value: "24" }, { description: "25fps", value: "25" }, { description: "29.97fps", value: "29.97" }, { description: "30fps", value: "30" }, { description: "59.97fps", value: "59.97" }, { description: "60fps", value: "60" }] },
                     { name: "bitrate", description: "Bitrate", required: false, type: "string", default: actualdata.bitrate },
                     { name: "audiocodec", description: "Audio codec", required: false, type: "string", default: actualdata.audiocodec },
+                    { name: "headers", description: "Headers to pass to ffmpeg (experimental)", required: false, type: "string", default: actualdata.headers }
 
                 ]
             },
