@@ -209,6 +209,7 @@ const { PassThrough } = require("stream").Duplex;
 
 var arrstreamserver = []
 var streamserverFailoverStates = []
+var skipStreamServerRemovalPids = []
 
 
 var debug = { PID: 0, url: "", endpoint: "", remoteIP: "", app: "", command: "", statusExec: "", lastEvent: "", exitCode: "", exitSignal: "", message: "", lastError: "", lastConsoleData: { stdErr: "", stdin: "" } };
@@ -4663,6 +4664,7 @@ function addprocess(req, spawn, user, streamservertype, streamserverArgs) {
     var streamlinkserver = false;
     var restream = false;
     var isStreamServer = false;
+    var isFailoverTestcard = false;
     var streamserver = streamserverArgs;
     var streamservername = "";
     var useragent = req.headers["user-agent"];
@@ -4684,6 +4686,15 @@ function addprocess(req, spawn, user, streamservertype, streamserverArgs) {
             if (mystreamserverlistIndex != -1) {
             arrstreamserverlist[mystreamserverlistIndex].status = "running";
             }
+            break;
+        case "streamserverFailover":
+            isStreamServer = true;
+            isFailoverTestcard = true;
+            streamservername = streamserverArgs;
+            mystreamserverlistIndex = arrstreamserverlist.findIndex(val => val.streamname === streamservername);
+            if (mystreamserverlistIndex != -1) {
+            arrstreamserverlist[mystreamserverlistIndex].status = "running";
+            }
 
     }
 
@@ -4691,7 +4702,7 @@ function addprocess(req, spawn, user, streamservertype, streamserverArgs) {
     spawncommand = spawncommand.toString();
     spawncommand = spawncommand.replace(/,/g, ' ');
     log("added process " + PID + " to status");
-    processes.push({ url: req.query.url, PID: PID, childprocess: childprocesses, clientIP: req.ip, endpoint: req.path, command: spawncommand, dataSize: 0, user: user, streamlinkserver: streamlinkserver, restream: restream, isStreamServer: isStreamServer, streamArgs: streamserverArgs, spawnArgs: spawn.spawnargs, streamservername: streamservername, client: { ip: req.ip, isMobile: req.useragent.isMobile, isPhone: req.useragent.isPhone, isAndroid: req.useragent.isAndroid, isDesktop: req.useragent.isDesktop, isLinux: req.useragent.isLinux, isWindows: req.useragent.isWindows, isBot: req.useragent.isBot, browser: req.useragent.browser, version: req.useragent.version, os: req.useragent.os, platform: req.useragent.platform, source: req.useragent.source } });
+    processes.push({ url: req.query.url, PID: PID, childprocess: childprocesses, clientIP: req.ip, endpoint: req.path, command: spawncommand, dataSize: 0, user: user, streamlinkserver: streamlinkserver, restream: restream, isStreamServer: isStreamServer, isFailoverTestcard: isFailoverTestcard, streamArgs: streamserverArgs, spawnArgs: spawn.spawnargs, streamservername: streamservername, client: { ip: req.ip, isMobile: req.useragent.isMobile, isPhone: req.useragent.isPhone, isAndroid: req.useragent.isAndroid, isDesktop: req.useragent.isDesktop, isLinux: req.useragent.isLinux, isWindows: req.useragent.isWindows, isBot: req.useragent.isBot, browser: req.useragent.browser, version: req.useragent.version, os: req.useragent.os, platform: req.useragent.platform, source: req.useragent.source } });
 
 }
 
@@ -5295,7 +5306,7 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
     var streamerrorpid = 0;
     var streamserver = req.query.streamserver;
     var isStreamServer = false;
-    var tunnel = new PassThrough();
+    var tunnel = undefined;
     var html = "";
     var clientIP = req.ip;
     var streamcheck = undefined;
@@ -5328,6 +5339,13 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
     if (streamserver != undefined) {
         isStreamServer = true;
         streamserver = encodeURI(streamserver);
+        var arrstreamserverIndexExisting = arrstreamserver.findIndex(value => value.streamname === streamserver);
+        if (arrstreamserverIndexExisting >= 0 && arrstreamserver[arrstreamserverIndexExisting].tunnel != undefined) {
+            tunnel = arrstreamserver[arrstreamserverIndexExisting].tunnel;
+            log("reusing existing tunnel for streamserver " + streamserver);
+        } else {
+            tunnel = new PassThrough();
+        }
         if (req.query.streamdescription != undefined) {
             serverdescription = req.query.streamdescription;
         } else {
@@ -5347,7 +5365,7 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
         return false;
     }
 
-    if (isCallFromBrowser(req) == false && isStreamServer == true) {
+    if (isCallFromBrowser(req) == false && isStreamServer == true && auth.user != "system") {
         res.statusMessage = "you can only use the streamserver query parameter in browser"
         res.status(400).end()
         return false;
@@ -5434,6 +5452,14 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
     })
 
     stream.stdout.on('data', (data) => {
+        if (isStreamServer == true) {
+            var failoverState = getStreamServerFailoverState(decodeURI(streamserver));
+            if (failoverState != undefined && failoverState.startingLive === true) {
+                log("streamserver " + streamserver + " live data detected, stopping failover testcard");
+                clearStreamServerFailoverState(decodeURI(streamserver), true);
+            }
+        }
+
         if (streamstart == false && showErrorInStream == true && isStreamServer == false) {
             stream.stdout.pipe(res);
 
@@ -5455,7 +5481,7 @@ function runStream(req, res, spawn, app, noDisplayErrorInStream = false) {
                 var arrstreamserverIndex = arrstreamserver.findIndex(value => value.streamname === streamserver);
                 if (arrstreamserverIndex < 0) {
                     arrstreamserver.push({ streamname: streamserver, tunnel: tunnel })
-                } else {
+                } else if (arrstreamserver[arrstreamserverIndex].tunnel == undefined) {
                     arrstreamserver[arrstreamserverIndex].tunnel = tunnel;
                 }
 
@@ -5584,9 +5610,15 @@ function streamServerExist(streamservername) {
 }
 
 function removeStreamServer(PID, streamname = "") {
+    if (skipStreamServerRemovalPids.indexOf(PID) >= 0) {
+        skipStreamServerRemovalPids = skipStreamServerRemovalPids.filter(function(val) { return val !== PID; });
+        return;
+    }
+
     var streamnametofind = streamname;
+    var processIndex = -1;
     if (streamname != "" && streamname != undefined) {
-        var processIndex = processes.findIndex(val => val.PID === PID);
+        processIndex = processes.findIndex(val => val.PID === PID);
         try {
             streamnametofind = processes[processIndex].streamservername
         } catch (e) {
@@ -5595,7 +5627,23 @@ function removeStreamServer(PID, streamname = "") {
 
     }
     if (streamnametofind != "") {
-        arrstreamserver = arrstreamserver.filter(val => val.streamname !== processes[processIndex].streamservername);
+        var failoverState = getStreamServerFailoverState(streamnametofind);
+        if (failoverState != undefined) {
+            var testcardPid = (failoverState.testcardProcess && failoverState.testcardProcess.pid) ? failoverState.testcardProcess.pid : 0;
+            if (testcardPid !== PID || failoverState.startingLive === true) {
+                return;
+            }
+        }
+    }
+    if (streamnametofind != "") {
+        if (processIndex < 0) {
+            processIndex = processes.findIndex(val => val.PID === PID);
+        }
+        if (processIndex >= 0 && processes[processIndex] != undefined) {
+            arrstreamserver = arrstreamserver.filter(val => val.streamname !== processes[processIndex].streamservername);
+        } else {
+            arrstreamserver = arrstreamserver.filter(val => val.streamname !== streamnametofind);
+        }
         streamserverstatus = streamserverstatus.filter(val => val.streamname !== streamnametofind);
     }
 
@@ -5761,7 +5809,21 @@ function getStreamServerFailoverState(streamname) {
     return streamserverFailoverStates.find(function(val) { return val.streamname === streamname; });
 }
 
-function clearStreamServerFailoverState(streamname, stopTestcardProcess = true) {
+function hasActiveLiveStreamProcess(streamname) {
+    return processes.some(function(p) {
+        return p.streamservername === streamname && p.isStreamServer === true && p.isFailoverTestcard !== true;
+    });
+}
+
+function getActiveLiveStreamProcessPids(streamname) {
+    return processes
+        .filter(function(p) {
+            return p.streamservername === streamname && p.isStreamServer === true && p.isFailoverTestcard !== true;
+        })
+        .map(function(p) { return p.PID; });
+}
+
+function clearStreamServerFailoverState(streamname, stopTestcardProcess = true, preserveTunnelOnKill = true) {
     var failover = getStreamServerFailoverState(streamname);
     if (failover == undefined) {
         return;
@@ -5769,8 +5831,16 @@ function clearStreamServerFailoverState(streamname, stopTestcardProcess = true) 
     if (failover.monitor != undefined) {
         clearInterval(failover.monitor);
     }
+    if (failover.liveStartGuardTimeout != undefined) {
+        clearTimeout(failover.liveStartGuardTimeout);
+    }
     if (stopTestcardProcess == true && failover.testcardProcess != undefined) {
         try {
+            if (preserveTunnelOnKill == true && failover.testcardProcess.pid != undefined) {
+                if (skipStreamServerRemovalPids.indexOf(failover.testcardProcess.pid) < 0) {
+                    skipStreamServerRemovalPids.push(failover.testcardProcess.pid);
+                }
+            }
             killProcesses(failover.testcardProcess.pid);
         } catch (e) {
             log("error on stop failover testcard process for streamserver " + streamname + ": " + e.message);
@@ -5992,13 +6062,25 @@ function startStreamServer(streamname, req) {
                 resp.on('data', (chunk) => {
                     data += chunk;
                 });
-                resp.on('end', () => {});
+                resp.on('end', () => {
+                    if (resp.statusCode != undefined && resp.statusCode >= 400) {
+                        var failoverState = getStreamServerFailoverState(originalStreamname);
+                        if (failoverState != undefined) {
+                            failoverState.startingLive = false;
+                        }
+                        log("streamserver " + originalStreamname + " live start attempt returned HTTP " + resp.statusCode + ", keeping testcard and waiting retry");
+                    }
+                });
             }).on("error", (err) => {
+                var failoverState = getStreamServerFailoverState(originalStreamname);
+                if (failoverState != undefined) {
+                    failoverState.startingLive = false;
+                }
                 log("Error on call start streamserver " + originalStreamname + ": " + err.message);
             });
         }
 
-        clearStreamServerFailoverState(originalStreamname, true);
+        clearStreamServerFailoverState(originalStreamname, true, false);
         if (config.streamserver.showTestcardOnFailStream === true) {
             var streamCheckStatus = checkstream(url);
             if (streamCheckStatus.streamstatus !== "online") {
@@ -6011,7 +6093,7 @@ function startStreamServer(streamname, req) {
                 }
 
                 var testcardProcess = spawnStreamServerTestcard(streamCheckStatus.mensagem);
-                addprocess(req, testcardProcess, "system", "streamserver", originalStreamname);
+                addprocess(req, testcardProcess, "system", "streamserverFailover", originalStreamname);
 
                 testcardProcess.stdout.on('data', function(data) {
                     tunnel.write(data);
@@ -6027,15 +6109,58 @@ function startStreamServer(streamname, req) {
                     removeprocess(testcardProcess.pid);
                 });
 
-                var monitor = setInterval(function() {
-                    var monitorStatus = checkstream(url);
-                    if (monitorStatus.streamstatus === "online") {
-                        log("streamserver " + originalStreamname + " source is online, replacing testcard by live stream");
-                        clearStreamServerFailoverState(originalStreamname, true);
+                function attemptLiveStartFromFailover(reason) {
+                    var now = Date.now();
+                    var currentFailover = getStreamServerFailoverState(originalStreamname);
+                    if (currentFailover == undefined) {
+                        return;
+                    }
+                    var enoughTimeSinceLastAttempt = (now - (currentFailover.lastLiveStartAttemptAt || 0)) > 10000;
+                    if (hasActiveLiveStreamProcess(originalStreamname) == false && currentFailover.startingLive !== true && enoughTimeSinceLastAttempt) {
+                        currentFailover.startingLive = true;
+                        currentFailover.lastLiveStartAttemptAt = now;
+                        log("streamserver " + originalStreamname + " failover attempting live start (" + reason + ")");
                         triggerStartRequest();
+                        if (currentFailover.liveStartGuardTimeout != undefined) {
+                            clearTimeout(currentFailover.liveStartGuardTimeout);
+                        }
+                        currentFailover.liveStartGuardTimeout = setTimeout(function() {
+                            var state = getStreamServerFailoverState(originalStreamname);
+                            if (state != undefined && state.startingLive === true) {
+                                var staleLivePids = getActiveLiveStreamProcessPids(originalStreamname);
+                                if (staleLivePids.length > 0) {
+                                    staleLivePids.forEach(function(pid) {
+                                        try {
+                                            log("streamserver " + originalStreamname + " killing stale live process PID " + pid + " after watchdog timeout");
+                                            killProcesses(pid);
+                                        } catch (e) {
+                                            log("streamserver " + originalStreamname + " error killing stale live process PID " + pid + ": " + e.message);
+                                        }
+                                    });
+                                }
+                                state.startingLive = false;
+                                log("streamserver " + originalStreamname + " live start watchdog timeout, keeping testcard and retrying later");
+                            }
+                        }, 30000);
+                    }
+                }
+
+                var monitor = setInterval(function() {
+                    var now = Date.now();
+                    var monitorStatus = checkstream(url);
+                    var currentFailover = getStreamServerFailoverState(originalStreamname);
+                    if (currentFailover != undefined) {
+                        var sourceLikelyOnline = monitorStatus.streamstatus === "online";
+                        var staleAttempt = (now - (currentFailover.lastLiveStartAttemptAt || 0)) > 45000;
+                        if (sourceLikelyOnline) {
+                            attemptLiveStartFromFailover("source-online");
+                        } else if (staleAttempt) {
+                            attemptLiveStartFromFailover("stale-retry");
+                        }
                     }
                 }, monitorIntervalSeconds * 1000);
-                streamserverFailoverStates.push({ streamname: originalStreamname, monitor: monitor, testcardProcess: testcardProcess });
+                streamserverFailoverStates.push({ streamname: originalStreamname, monitor: monitor, testcardProcess: testcardProcess, startingLive: false, lastLiveStartAttemptAt: 0, liveStartGuardTimeout: undefined });
+                attemptLiveStartFromFailover("initial-check-offline");
 
                 log("stream server " + originalStreamname + " started with testcard failover");
                 response.status = 200;
@@ -6121,7 +6246,7 @@ function stopStreamServer(streamservername) {
     if (streamserverlistnew.PID != undefined) {
         try {
             killProcesses(streamserverlistnew.PID);
-            clearStreamServerFailoverState(streamservername, true);
+            clearStreamServerFailoverState(streamservername, true, false);
             log("stream server " + streamservername + " stopped");
 
             return { status: "stopped", message: "process (PID) " + streamserverlistnew.PID + " and your childs has killed" }
@@ -6133,7 +6258,7 @@ function stopStreamServer(streamservername) {
 
     } else {
         if (failoverState != undefined) {
-            clearStreamServerFailoverState(streamservername, true);
+            clearStreamServerFailoverState(streamservername, true, false);
             log("stream server " + streamservername + " stopped");
             return { status: "stopped", message: "testcard failover process has killed" };
         }
