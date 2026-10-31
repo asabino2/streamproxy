@@ -21,7 +21,7 @@ With Streamproxy you can watch livestreams from YouTube, Twitch (and any other s
 - ProgTV
 - and others
 
-Current release: **2.0.6**
+Current release: **2.1.0**
 
 To start the server, run from command prompt:
 
@@ -248,6 +248,11 @@ Returns a jpeg snapshot of Sky News stream.
 
 - Manage created streamservers.
 - You can list, stop, start, edit, delete and create new streamservers.
+- In **Settings → Stream Server**, enable **Show testcard on fail stream** to keep the stream server online even if the source is temporarily offline:
+  - On start, streamproxy checks source availability.
+  - If source is online, behavior is unchanged.
+  - If source is offline, streamproxy serves a testcard with the error message overlay.
+  - While the testcard is being served, streamproxy keeps monitoring the source and automatically switches to the live stream when it becomes available.
 
 ---
 
@@ -582,6 +587,12 @@ If you find this app useful, please consider donating to support development.
 ---
 
 ## 📝 Changelog
+
+### 2.1.0
+
+- Added **Show testcard on fail stream** in Stream Server settings (all supported UI languages).
+- Stream server startup now checks source availability and can serve a testcard with error message while source is offline.
+- Added automatic source monitoring during testcard fallback and auto-switch back to live stream when source is online again.
 
 ### 2.0.6
 

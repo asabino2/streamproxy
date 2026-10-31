@@ -208,6 +208,7 @@ const { PassThrough } = require("stream").Duplex;
 //const { tunnelteste } = require("stream").Duplex;
 
 var arrstreamserver = []
+var streamserverFailoverStates = []
 
 
 var debug = { PID: 0, url: "", endpoint: "", remoteIP: "", app: "", command: "", statusExec: "", lastEvent: "", exitCode: "", exitSignal: "", message: "", lastError: "", lastConsoleData: { stdErr: "", stdin: "" } };
@@ -2934,6 +2935,7 @@ app.post('/api/config', (req, res) => {
         if (body.streamserver.startOnInvoke !== undefined) config.streamserver.startOnInvoke = (body.streamserver.startOnInvoke === true || body.streamserver.startOnInvoke === 'true');
         if (body.streamserver.hideStoppedStreamServerInPlaylist !== undefined) config.streamserver.hideStoppedStreamServerInPlaylist = (body.streamserver.hideStoppedStreamServerInPlaylist === true || body.streamserver.hideStoppedStreamServerInPlaylist === 'true');
         if (body.streamserver.stopOnNoConnection !== undefined) config.streamserver.stopOnNoConnection = (body.streamserver.stopOnNoConnection === true || body.streamserver.stopOnNoConnection === 'true');
+        if (body.streamserver.showTestcardOnFailStream !== undefined) config.streamserver.showTestcardOnFailStream = (body.streamserver.showTestcardOnFailStream === true || body.streamserver.showTestcardOnFailStream === 'true');
     }
     if (body.ui && typeof body.ui === 'object') {
         if (!config.ui) config.ui = {};
@@ -2968,6 +2970,7 @@ app.get('/settings', (req, res) => {
     var cfgStartOnInvoke = (config.streamserver && config.streamserver.startOnInvoke) ? 'checked' : '';
     var cfgHideStopped = (config.streamserver && config.streamserver.hideStoppedStreamServerInPlaylist) ? 'checked' : '';
     var cfgStopOnNoConn = (config.streamserver && config.streamserver.stopOnNoConnection) ? 'checked' : '';
+    var cfgShowTestcardOnFailStream = (config.streamserver && config.streamserver.showTestcardOnFailStream) ? 'checked' : '';
     var authHeader = req.headers.authorization || '';
     var html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -3033,7 +3036,8 @@ app.get('/settings', (req, res) => {
         streamserver: {
           startOnInvoke: document.getElementById('cfgStartOnInvoke').checked,
           hideStoppedStreamServerInPlaylist: document.getElementById('cfgHideStopped').checked,
-          stopOnNoConnection: document.getElementById('cfgStopOnNoConn').checked
+          stopOnNoConnection: document.getElementById('cfgStopOnNoConn').checked,
+          showTestcardOnFailStream: document.getElementById('cfgShowTestcardOnFailStream').checked
         }
       };
       fetch('/api/config', {
@@ -3177,6 +3181,16 @@ app.get('/settings', (req, res) => {
           <div>
             <div class="settings-toggle-label" data-i18n="settings.ss.stoponnoconn">Stop on No Connection</div>
             <div class="settings-toggle-desc" data-i18n="settings.ss.stoponnoconn.desc">Stop stream server when no clients are connected</div>
+          </div>
+        </div>
+        <div class="settings-toggle-row">
+          <label class="settings-toggle">
+            <input type="checkbox" id="cfgShowTestcardOnFailStream" ${cfgShowTestcardOnFailStream}>
+            <span class="settings-toggle-slider"></span>
+          </label>
+          <div>
+            <div class="settings-toggle-label" data-i18n="settings.ss.showtestcardonfailstream">Show testcard on fail stream</div>
+            <div class="settings-toggle-desc" data-i18n="settings.ss.showtestcardonfailstream.desc">Show a testcard with error while source stream is offline and auto-start live stream when it comes back</div>
           </div>
         </div>
       </div>
@@ -4545,7 +4559,7 @@ function loadconfig() {
 
 
 
-        config = { port: argv['port'] || 4211, logheader: false, logConsole: true, logWeb: false, showErrorInStream: false, streamlinkpath: "", ffmpegpath: "", ffmpeg: { codec: "mpeg2video", format: "mpegts", serviceprovider: "streamproxy" }, streamserver: { startOnInvoke: false, hideStoppedStreamServerInPlaylist: true, stopOnNoConnection: false } };
+        config = { port: argv['port'] || 4211, logheader: false, logConsole: true, logWeb: false, showErrorInStream: false, streamlinkpath: "", ffmpegpath: "", ffmpeg: { codec: "mpeg2video", format: "mpegts", serviceprovider: "streamproxy" }, streamserver: { startOnInvoke: false, hideStoppedStreamServerInPlaylist: true, stopOnNoConnection: false, showTestcardOnFailStream: false } };
 
 
         const fswrite = require("fs");
@@ -4601,7 +4615,7 @@ function loadconfig() {
 
 
     if (config.streamserver == undefined) {
-        config.streamserver = { startOnInvoke: false, hideStoppedStreamServerInPlaylist: true };
+        config.streamserver = { startOnInvoke: false, hideStoppedStreamServerInPlaylist: true, stopOnNoConnection: false, showTestcardOnFailStream: false };
     } else {
 
         if (config.streamserver.startOnInvoke == undefined) {
@@ -4616,6 +4630,9 @@ function loadconfig() {
 
         if (config.streamserver.stopOnNoConnection == undefined) {
             config.streamserver.stopOnNoConnection = false;
+        }
+        if (config.streamserver.showTestcardOnFailStream == undefined) {
+            config.streamserver.showTestcardOnFailStream = false;
         }
     }
 
@@ -5605,15 +5622,161 @@ function checkstream(url) {
         var streamlinkcheck = checkStreamlink(url);
         if (streamlinkcheck.streamstatus == "offline") {
             status = "offline";
-            erro = e.message;
+            if (streamlinkcheck.mensagem != undefined && streamlinkcheck.mensagem != "") {
+                erro = streamlinkcheck.mensagem;
+            } else {
+                erro = e.message;
+            }
         } else {
             status = streamlinkcheck.streamstatus;
-            erro = "get from streamlink";
+            erro = e.message;
 
         }
 
     }
     return { streamurl: url, streamstatus: status, mensagem: erro };
+}
+
+function sanitizeTestcardMessage(text) {
+    var msg = String(text || "source stream offline");
+    msg = msg.replace(/[\r\n]+/g, " ");
+    msg = msg.replace(/[^a-zA-Z0-9 .,:;_\/@=\-\(\)\[\]]/g, " ");
+    msg = msg.replace(/\s+/g, " ").trim();
+    if (msg.length > 220) {
+        msg = msg.substring(0, 220);
+    }
+    if (msg.length === 0) {
+        msg = "source stream offline";
+    }
+    return msg;
+}
+
+function normalizeFailoverErrorMessage(rawErrorMessage) {
+    var text = String(rawErrorMessage || "").replace(/\r/g, "\n");
+    if (text.trim().length === 0) {
+        return "source stream offline";
+    }
+
+    var lines = text.split("\n").map(function(line) { return line.trim(); }).filter(function(line) { return line.length > 0; });
+    var ignoredPatterns = [
+        /^command failed:/i,
+        /^error reinitializing filters!/i,
+        /^failed to inject frame into filter network:/i,
+        /^error while processing the decoded data/i
+    ];
+    var preferredPatterns = [
+        /live_stream_offline/i,
+        /could not get video info/i,
+        /no playable streams found/i,
+        /connection to .* failed/i,
+        /http error/i,
+        /timed out/i,
+        /\[tcp @/i,
+        /\[https? @/i,
+        /\[error\]/i
+    ];
+    var kept = [];
+
+    lines.forEach(function(line) {
+        var ignore = ignoredPatterns.some(function(p) { return p.test(line); });
+        if (ignore == false) {
+            kept.push(line);
+        }
+    });
+
+    if (kept.length === 0) {
+        kept = lines;
+    }
+
+    var prioritized = kept.filter(function(line) {
+        return preferredPatterns.some(function(p) { return p.test(line); });
+    });
+    if (prioritized.length === 0) {
+        prioritized = kept;
+    }
+
+    var message = prioritized[0] || "source stream offline";
+    if (prioritized.length > 1) {
+        var second = prioritized[1];
+        if (message.toLowerCase() !== second.toLowerCase()) {
+            message = message + " | " + second;
+        }
+    }
+    return message;
+}
+
+function escapeFfmpegDrawtextValue(text) {
+    return String(text || "")
+        .replace(/\\/g, "\\\\")
+        .replace(/:/g, "\\:")
+        .replace(/'/g, "\\'")
+        .replace(/,/g, "\\,")
+        .replace(/\[/g, "\\[")
+        .replace(/\]/g, "\\]")
+        .replace(/%/g, "\\%");
+}
+
+function splitTestcardMessageLines(message) {
+    var normalized = String(message || "");
+    var parts = normalized.split("|").map(function(part) {
+        return sanitizeTestcardMessage(part);
+    }).filter(function(part) {
+        return part.length > 0;
+    });
+
+    var line1 = parts[0] || "source stream offline";
+    var line2 = parts[1] || "";
+
+    if (line2.length === 0 && line1.length > 90) {
+        var cutAt = line1.lastIndexOf(" ", 90);
+        if (cutAt < 40) {
+            cutAt = 90;
+        }
+        line2 = line1.substring(cutAt).trim();
+        line1 = line1.substring(0, cutAt).trim();
+    }
+
+    return { line1: line1, line2: line2 };
+}
+
+function spawnStreamServerTestcard(errorMessage) {
+    var rawText = normalizeFailoverErrorMessage(errorMessage);
+    var lines = splitTestcardMessageLines(rawText);
+    var line1 = escapeFfmpegDrawtextValue(lines.line1);
+    var line2 = escapeFfmpegDrawtextValue(lines.line2);
+    var filterGraph = `drawtext=fontsize=34:fontcolor=white:box=1:boxcolor=black@0.7:boxborderw=12:x=(w-text_w)/2:y=h-(text_h*3):text='${line1}'`;
+    if (line2 != "") {
+        filterGraph += `,drawtext=fontsize=26:fontcolor=white:box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=h-(text_h*1.4):text='${line2}'`;
+    }
+    var ffmpegcomm = `${config.ffmpegpath}ffmpeg -loglevel error -f lavfi -i smptebars=size=1280x720:rate=25 -vf "${filterGraph}" -c:v libx264 -f mpegts -`;
+
+    if (os.platform() == 'win32') {
+        return spawn(ffmpegcomm, { shell: 'powershell.exe' });
+    } else {
+        return spawn(ffmpegcomm, { shell: true });
+    }
+}
+
+function getStreamServerFailoverState(streamname) {
+    return streamserverFailoverStates.find(function(val) { return val.streamname === streamname; });
+}
+
+function clearStreamServerFailoverState(streamname, stopTestcardProcess = true) {
+    var failover = getStreamServerFailoverState(streamname);
+    if (failover == undefined) {
+        return;
+    }
+    if (failover.monitor != undefined) {
+        clearInterval(failover.monitor);
+    }
+    if (stopTestcardProcess == true && failover.testcardProcess != undefined) {
+        try {
+            killProcesses(failover.testcardProcess.pid);
+        } catch (e) {
+            log("error on stop failover testcard process for streamserver " + streamname + ": " + e.message);
+        }
+    }
+    streamserverFailoverStates = streamserverFailoverStates.filter(function(val) { return val.streamname !== streamname; });
 }
 
 function addStreamServerStatus(req, auth, streamname, UUID) {
@@ -5679,22 +5842,21 @@ function commonFrontendFunctionsGet() {
 }
 
 function startStreamServer(streamname, req) {
-
-
-
+    var originalStreamname = streamname;
     var mystreamserver = {};
     var arrstreamserverlistnew = getStreamServersListData();
-    var mystreamserverIndex = arrstreamserverlistnew.findIndex(val => val.streamname === streamname);
+    var mystreamserverIndex = arrstreamserverlistnew.findIndex(val => val.streamname === originalStreamname);
     var response = {};
     var userpass = "system:" + systempassword;
+    var monitorIntervalSeconds = 15;
     try {
         userpass = Buffer.from(userpass).toString('base64');
 
         if (mystreamserverIndex < 0) {
             response.status = 404;
-            response.statusMessage = "streamserver " + streamname + " not found";
-            response.json = { status: "error", message: "streamserver " + streamname + " not found" };
-            log("error on trying to start stream server " + streamname + "streamserver " + streamname + " not found")
+            response.statusMessage = "streamserver " + originalStreamname + " not found";
+            response.json = { status: "error", message: "streamserver " + originalStreamname + " not found" };
+            log("error on trying to start stream server " + originalStreamname + " streamserver not found")
             return response;
         }
 
@@ -5702,14 +5864,10 @@ function startStreamServer(streamname, req) {
 
         if (mystreamserver.status == "running") {
             response.status = 500;
-            response.statusMessage = "streamserver " + streamname + " already started";
-            response.json = { status: "error", message: "streamserver " + streamname + " already started" };
-            log("error on trying to start stream server " + streamname + "streamserver " + streamname + " already started")
+            response.statusMessage = "streamserver " + originalStreamname + " already started";
+            response.json = { status: "error", message: "streamserver " + originalStreamname + " already started" };
+            log("error on trying to start stream server " + originalStreamname + " streamserver already started")
             return response;
-        }
-
-        if (streamdescription == "") {
-            streamdescription = streamname;
         }
 
         var streammethod = mystreamserver.streammethod;
@@ -5726,21 +5884,16 @@ function startStreamServer(streamname, req) {
         var title = mystreamserver.title;
         var myheaders = mystreamserver.headers;
         var hasError = false;
-        var response = { status: 200, json: {} };
+        response = { status: 200, json: {} };
 
+        if (streamdescription == "") {
+            streamdescription = originalStreamname;
+        }
 
-
-
-        var url = mystreamserver.url;
-        var urltocall = "";
-
-        if (streamname == "" || streamname == undefined) {
-            //alert('fill stream name field');
-
+        if (originalStreamname == "" || originalStreamname == undefined) {
             hasError = true;
         } else {
-
-            streamname = "&streamserver=" + streamname
+            streamname = "&streamserver=" + originalStreamname
         }
 
         if (videoformat == "" || videoformat == undefined) {
@@ -5784,17 +5937,8 @@ function startStreamServer(streamname, req) {
             myheaders = "&headers=" + encodeURI(myheaders);
         }
 
-        /*
-    if (channelnumber == "" || channelnumber == undefined) {
-        channelnumber = "";
-
-    } else {
-        channelnumber = "&chnumber=" + channelnumber;
-    }
-*/
         if (videocodec == "" || videocodec == undefined) {
             videocodec = "";
-
         } else {
             videocodec = "&videocodec=" + videocodec;
         }
@@ -5812,22 +5956,18 @@ function startStreamServer(streamname, req) {
         }
 
         if (url == "" || url == undefined) {
-            //alert('fill stream name field');
-
             hasError = true;
         }
 
         if (hasError == true) {
             response.status = 500;
-            response.json = { status: "error", message: "server error on start streamserver " + streamname };
+            response.json = { status: "error", message: "server error on start streamserver " + originalStreamname };
             return response;
         }
-
 
         if (streammethod != "/videostream/ffmpeg" && streammethod != "/videostream/play") {
             videoformat = "";
             service_provider = "";
-
             videocodec = "";
             audiocodec = "";
         }
@@ -5839,61 +5979,78 @@ function startStreamServer(streamname, req) {
             title = "";
         }
 
+        function triggerStartRequest() {
+            const http = require("http");
+            var options = {
+                port: config.port,
+                path: streammethod + "?url=" + url + myheaders + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title,
+                headers: { systemAuthorization: userpass }
+            };
 
-
-        urltocall = "http://localhost:" + config.port + streammethod + "?url=" + url + myheaders + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title + bitrate;
-
-        const http = require("http");
-        var options = {};
-        /*
-            if (req.headers.authorization != undefined) {
-                options = {
-                    port: config.port,
-                    path: streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title,
-                    headers: { authorization: req.headers.authorization }
-                }
-            } else {
-                options = {
-                    port: config.port,
-                    path: streammethod + "?url=" + url + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title
-
-                }
-            }
-        */
-
-        options = {
-            port: config.port,
-            path: streammethod + "?url=" + url + myheaders + streamname + videoformat + streamdescription + service_provider + videocodec + framesize + framerate + audiocodec + title,
-            headers: { systemAuthorization: userpass }
+            http.get(options, (resp) => {
+                let data = '';
+                resp.on('data', (chunk) => {
+                    data += chunk;
+                });
+                resp.on('end', () => {});
+            }).on("error", (err) => {
+                log("Error on call start streamserver " + originalStreamname + ": " + err.message);
+            });
         }
 
-        http.get(options, (resp) => {
-            let data = '';
+        clearStreamServerFailoverState(originalStreamname, true);
+        if (config.streamserver.showTestcardOnFailStream === true) {
+            var streamCheckStatus = checkstream(url);
+            if (streamCheckStatus.streamstatus !== "online") {
+                var tunnel = new PassThrough();
+                var arrstreamserverIndex = arrstreamserver.findIndex(function(value) { return value.streamname === originalStreamname; });
+                if (arrstreamserverIndex < 0) {
+                    arrstreamserver.push({ streamname: originalStreamname, tunnel: tunnel });
+                } else {
+                    arrstreamserver[arrstreamserverIndex].tunnel = tunnel;
+                }
 
-            // A chunk of data has been received.
-            resp.on('data', (chunk) => {
-                data += chunk;
+                var testcardProcess = spawnStreamServerTestcard(streamCheckStatus.mensagem);
+                addprocess(req, testcardProcess, "system", "streamserver", originalStreamname);
 
-            });
+                testcardProcess.stdout.on('data', function(data) {
+                    tunnel.write(data);
+                    setDataSize(testcardProcess.pid, data);
+                });
+                testcardProcess.stderr.on('data', function(data) {
+                    log("streamserver testcard [" + originalStreamname + "]: " + data.toString());
+                });
+                testcardProcess.on('close', function() {
+                    removeprocess(testcardProcess.pid);
+                });
+                testcardProcess.on('exit', function() {
+                    removeprocess(testcardProcess.pid);
+                });
 
-            // The whole response has been received. Print out the result.
-            resp.on('end', () => {
+                var monitor = setInterval(function() {
+                    var monitorStatus = checkstream(url);
+                    if (monitorStatus.streamstatus === "online") {
+                        log("streamserver " + originalStreamname + " source is online, replacing testcard by live stream");
+                        clearStreamServerFailoverState(originalStreamname, true);
+                        triggerStartRequest();
+                    }
+                }, monitorIntervalSeconds * 1000);
+                streamserverFailoverStates.push({ streamname: originalStreamname, monitor: monitor, testcardProcess: testcardProcess });
 
+                log("stream server " + originalStreamname + " started with testcard failover");
+                response.status = 200;
+                response.json = { status: "waiting", message: "source stream offline, testcard started while monitoring source availability" };
+                return response;
+            }
+        }
 
-
-            });
-
-        }).on("error", (err) => {
-            log("Error on call start streanserver " + streamname + ": " + err.message);
-
-
-        });
-        log("stream server " + streamname + " has started");
+        triggerStartRequest();
+        log("stream server " + originalStreamname + " has started");
         response.status = 200;
         response.json = { status: "ok", message: "process executed asynchronous" };
         return response;
     } catch (e) {
-        log("Error on call start streanserver " + streamname + ": " + e.message);
+        log("Error on call start streamserver " + originalStreamname + ": " + e.message);
         console.log("internal error: " + e.message);
         response.json = { status: "internalerror", message: e.message };
     }
@@ -5957,12 +6114,14 @@ function getStreamServerListSingle(streamname) {
 }
 
 function stopStreamServer(streamservername) {
+    var failoverState = getStreamServerFailoverState(streamservername);
     var streamserverlistnew = getStreamServerListSingle(streamservername);
     var timestamp1 = Date.now();
     var diff = 0;
     if (streamserverlistnew.PID != undefined) {
         try {
             killProcesses(streamserverlistnew.PID);
+            clearStreamServerFailoverState(streamservername, true);
             log("stream server " + streamservername + " stopped");
 
             return { status: "stopped", message: "process (PID) " + streamserverlistnew.PID + " and your childs has killed" }
@@ -5973,6 +6132,11 @@ function stopStreamServer(streamservername) {
         }
 
     } else {
+        if (failoverState != undefined) {
+            clearStreamServerFailoverState(streamservername, true);
+            log("stream server " + streamservername + " stopped");
+            return { status: "stopped", message: "testcard failover process has killed" };
+        }
         log(" error on trying to stop stream server " + streamservername + " stream server not found");
         return { status: "not stopped", message: "stream server " + streamservername + " not found" };
     }
@@ -7269,14 +7433,14 @@ function CreateMenu(auth) {
   };
   Object.keys(SP_EXTRA2).forEach(function(l){ if(SP_TRANS[l]) Object.assign(SP_TRANS[l], SP_EXTRA2[l]); });
   var SP_EXTRA3 = {
-    pt:{"settings.section.general":"Geral","settings.logconsole":"Log no Console","settings.logconsole.desc":"Exibe logs no console do servidor","settings.logweb":"Log Web","settings.logweb.desc":"Exibe logs em /log (browser)","settings.showerror":"Exibir Erros no Stream","settings.showerror.desc":"Mostra detalhes de erro na saída do stream","settings.streamlinkpath":"Caminho do Streamlink","settings.streamlinkpath.desc":"Caminho completo do executável streamlink (vazio = auto)","settings.ffmpegpath":"Caminho do FFmpeg","settings.ffmpegpath.desc":"Caminho completo do executável ffmpeg (vazio = auto)","settings.youtubeapikey":"Chave API YouTube","settings.youtubeapikey.desc":"Chave de API para conversão de canal YouTube em podcast","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Codec de Vídeo","settings.ffmpeg.codec.desc":"Codec de vídeo padrão para streams transcodificados","settings.ffmpeg.format":"Formato de Vídeo","settings.ffmpeg.format.desc":"Formato de contêiner de vídeo padrão","settings.ffmpeg.serviceprovider":"Provedor de Serviço","settings.ffmpeg.serviceprovider.desc":"Nome do provedor de serviço nos metadados","settings.section.streamserver":"Stream Server","settings.ss.startoninvoke":"Iniciar ao Acessar","settings.ss.startoninvoke.desc":"Inicia automaticamente um servidor parado quando acessado","settings.ss.hidestopped":"Ocultar Parados na Playlist","settings.ss.hidestopped.desc":"Oculta servidores parados no playlist M3U","settings.ss.stoponnoconn":"Parar sem Conexões","settings.ss.stoponnoconn.desc":"Para o servidor quando não há clientes conectados"},
-    en:{"settings.section.general":"General","settings.logconsole":"Console Log","settings.logconsole.desc":"Print logs to server console","settings.logweb":"Web Log","settings.logweb.desc":"Display logs at /log (browser)","settings.showerror":"Show Error in Stream","settings.showerror.desc":"Show error details in stream output","settings.streamlinkpath":"Streamlink Path","settings.streamlinkpath.desc":"Full path to streamlink executable (empty = auto-detect)","settings.ffmpegpath":"FFmpeg Path","settings.ffmpegpath.desc":"Full path to ffmpeg executable (empty = auto-detect)","settings.youtubeapikey":"YouTube API Key","settings.youtubeapikey.desc":"API key for YouTube-to-podcast feature","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Video Codec","settings.ffmpeg.codec.desc":"Default video codec for transcoded streams","settings.ffmpeg.format":"Video Format","settings.ffmpeg.format.desc":"Default video container format","settings.ffmpeg.serviceprovider":"Service Provider","settings.ffmpeg.serviceprovider.desc":"Metadata service provider name in transcoded streams","settings.section.streamserver":"Stream Server","settings.ss.startoninvoke":"Start on Invoke","settings.ss.startoninvoke.desc":"Auto-start a stopped stream server when accessed","settings.ss.hidestopped":"Hide Stopped in Playlist","settings.ss.hidestopped.desc":"Hide stopped stream servers in M3U playlist","settings.ss.stoponnoconn":"Stop on No Connection","settings.ss.stoponnoconn.desc":"Stop stream server when no clients are connected"},
-    es:{"settings.section.general":"General","settings.logconsole":"Log de Consola","settings.logconsole.desc":"Muestra logs en la consola del servidor","settings.logweb":"Log Web","settings.logweb.desc":"Muestra logs en /log (navegador)","settings.showerror":"Mostrar Error en Stream","settings.showerror.desc":"Muestra detalles de error en la salida del stream","settings.streamlinkpath":"Ruta de Streamlink","settings.streamlinkpath.desc":"Ruta completa al ejecutable streamlink (vacío = auto)","settings.ffmpegpath":"Ruta de FFmpeg","settings.ffmpegpath.desc":"Ruta completa al ejecutable ffmpeg (vacío = auto)","settings.youtubeapikey":"Clave API YouTube","settings.youtubeapikey.desc":"Clave de API para conversión de canal YouTube a podcast","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Codec de Vídeo","settings.ffmpeg.codec.desc":"Codec de vídeo predeterminado para streams transcodificados","settings.ffmpeg.format":"Formato de Vídeo","settings.ffmpeg.format.desc":"Formato de contenedor de vídeo predeterminado","settings.ffmpeg.serviceprovider":"Proveedor de Servicio","settings.ffmpeg.serviceprovider.desc":"Nombre del proveedor de servicio en metadatos","settings.section.streamserver":"Stream Server","settings.ss.startoninvoke":"Iniciar al Acceder","settings.ss.startoninvoke.desc":"Inicia automáticamente un servidor detenido al acceder","settings.ss.hidestopped":"Ocultar Detenidos en Playlist","settings.ss.hidestopped.desc":"Oculta servidores detenidos en el playlist M3U","settings.ss.stoponnoconn":"Detener sin Conexiones","settings.ss.stoponnoconn.desc":"Detiene el servidor cuando no hay clientes conectados"},
-    de:{"settings.section.general":"Allgemein","settings.logconsole":"Konsolenprotokoll","settings.logconsole.desc":"Protokoll in der Serverkonsole ausgeben","settings.logweb":"Web-Protokoll","settings.logweb.desc":"Protokoll unter /log anzeigen (Browser)","settings.showerror":"Fehler im Stream anzeigen","settings.showerror.desc":"Fehlerdetails in der Stream-Ausgabe anzeigen","settings.streamlinkpath":"Streamlink-Pfad","settings.streamlinkpath.desc":"Vollständiger Pfad zur streamlink-Ausführungsdatei (leer = automatisch)","settings.ffmpegpath":"FFmpeg-Pfad","settings.ffmpegpath.desc":"Vollständiger Pfad zur ffmpeg-Ausführungsdatei (leer = automatisch)","settings.youtubeapikey":"YouTube API-Schlüssel","settings.youtubeapikey.desc":"API-Schlüssel für YouTube-Kanal-zu-Podcast-Funktion","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Video-Codec","settings.ffmpeg.codec.desc":"Standard-Video-Codec für transkodierte Streams","settings.ffmpeg.format":"Videoformat","settings.ffmpeg.format.desc":"Standard-Videocontainerformat","settings.ffmpeg.serviceprovider":"Dienstanbieter","settings.ffmpeg.serviceprovider.desc":"Name des Dienstanbieters in Metadaten","settings.section.streamserver":"Stream-Server","settings.ss.startoninvoke":"Beim Zugriff starten","settings.ss.startoninvoke.desc":"Gestoppten Stream-Server beim Zugriff automatisch starten","settings.ss.hidestopped":"Gestoppte in Playlist ausblenden","settings.ss.hidestopped.desc":"Gestoppte Stream-Server in der M3U-Playlist ausblenden","settings.ss.stoponnoconn":"Bei keiner Verbindung stoppen","settings.ss.stoponnoconn.desc":"Stream-Server stoppen, wenn keine Clients verbunden sind"},
-    it:{"settings.section.general":"Generale","settings.logconsole":"Log Console","settings.logconsole.desc":"Stampa i log nella console del server","settings.logweb":"Log Web","settings.logweb.desc":"Mostra i log su /log (browser)","settings.showerror":"Mostra Errore nello Stream","settings.showerror.desc":"Mostra i dettagli degli errori nell'output dello stream","settings.streamlinkpath":"Percorso Streamlink","settings.streamlinkpath.desc":"Percorso completo all'eseguibile streamlink (vuoto = auto)","settings.ffmpegpath":"Percorso FFmpeg","settings.ffmpegpath.desc":"Percorso completo all'eseguibile ffmpeg (vuoto = auto)","settings.youtubeapikey":"Chiave API YouTube","settings.youtubeapikey.desc":"Chiave API per la conversione canale YouTube in podcast","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Codec Video","settings.ffmpeg.codec.desc":"Codec video predefinito per stream transcodificati","settings.ffmpeg.format":"Formato Video","settings.ffmpeg.format.desc":"Formato contenitore video predefinito","settings.ffmpeg.serviceprovider":"Provider di Servizio","settings.ffmpeg.serviceprovider.desc":"Nome del provider di servizio nei metadati","settings.section.streamserver":"Stream Server","settings.ss.startoninvoke":"Avvia all'Accesso","settings.ss.startoninvoke.desc":"Avvia automaticamente un server fermo quando acceduto","settings.ss.hidestopped":"Nascondi Fermi nella Playlist","settings.ss.hidestopped.desc":"Nasconde i server fermi nella playlist M3U","settings.ss.stoponnoconn":"Ferma senza Connessioni","settings.ss.stoponnoconn.desc":"Ferma il server quando non ci sono client connessi"},
-    ru:{"settings.section.general":"Общие","settings.logconsole":"Лог консоли","settings.logconsole.desc":"Выводить логи в консоль сервера","settings.logweb":"Веб-лог","settings.logweb.desc":"Отображать логи по адресу /log (браузер)","settings.showerror":"Показывать ошибки в потоке","settings.showerror.desc":"Показывать детали ошибок в выводе потока","settings.streamlinkpath":"Путь к Streamlink","settings.streamlinkpath.desc":"Полный путь к исполняемому файлу streamlink (пусто = авто)","settings.ffmpegpath":"Путь к FFmpeg","settings.ffmpegpath.desc":"Полный путь к исполняемому файлу ffmpeg (пусто = авто)","settings.youtubeapikey":"Ключ API YouTube","settings.youtubeapikey.desc":"Ключ API для функции преобразования YouTube-канала в подкаст","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Видеокодек","settings.ffmpeg.codec.desc":"Видеокодек по умолчанию для транскодированных потоков","settings.ffmpeg.format":"Видеоформат","settings.ffmpeg.format.desc":"Формат видеоконтейнера по умолчанию","settings.ffmpeg.serviceprovider":"Поставщик услуг","settings.ffmpeg.serviceprovider.desc":"Имя поставщика услуг в метаданных","settings.section.streamserver":"Стрим-сервер","settings.ss.startoninvoke":"Запускать при доступе","settings.ss.startoninvoke.desc":"Автоматически запускать остановленный сервер при обращении","settings.ss.hidestopped":"Скрыть остановленные в плейлисте","settings.ss.hidestopped.desc":"Скрывать остановленные серверы в плейлисте M3U","settings.ss.stoponnoconn":"Остановить без подключений","settings.ss.stoponnoconn.desc":"Останавливать сервер при отсутствии клиентов"},
-    zh:{"settings.section.general":"常规","settings.logconsole":"控制台日志","settings.logconsole.desc":"将日志打印到服务器控制台","settings.logweb":"Web日志","settings.logweb.desc":"在 /log 显示日志（浏览器）","settings.showerror":"在流中显示错误","settings.showerror.desc":"在流输出中显示错误详情","settings.streamlinkpath":"Streamlink路径","settings.streamlinkpath.desc":"Streamlink可执行文件的完整路径（空=自动检测）","settings.ffmpegpath":"FFmpeg路径","settings.ffmpegpath.desc":"FFmpeg可执行文件的完整路径（空=自动检测）","settings.youtubeapikey":"YouTube API密钥","settings.youtubeapikey.desc":"YouTube频道转播客功能的API密钥","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"视频编解码器","settings.ffmpeg.codec.desc":"转码流的默认视频编解码器","settings.ffmpeg.format":"视频格式","settings.ffmpeg.format.desc":"默认视频容器格式","settings.ffmpeg.serviceprovider":"服务提供商","settings.ffmpeg.serviceprovider.desc":"转码流元数据中的服务提供商名称","settings.section.streamserver":"流服务器","settings.ss.startoninvoke":"访问时启动","settings.ss.startoninvoke.desc":"访问时自动启动已停止的流服务器","settings.ss.hidestopped":"在播放列表中隐藏已停止","settings.ss.hidestopped.desc":"在M3U播放列表中隐藏已停止的流服务器","settings.ss.stoponnoconn":"无连接时停止","settings.ss.stoponnoconn.desc":"没有客户端连接时停止流服务器"},
-    ja:{"settings.section.general":"全般","settings.logconsole":"コンソールログ","settings.logconsole.desc":"サーバーコンソールにログを出力","settings.logweb":"Webログ","settings.logweb.desc":"/log でログを表示（ブラウザ）","settings.showerror":"ストリームにエラーを表示","settings.showerror.desc":"ストリーム出力にエラーの詳細を表示","settings.streamlinkpath":"Streamlinkパス","settings.streamlinkpath.desc":"streamlink実行ファイルのフルパス（空=自動検出）","settings.ffmpegpath":"FFmpegパス","settings.ffmpegpath.desc":"ffmpeg実行ファイルのフルパス（空=自動検出）","settings.youtubeapikey":"YouTube APIキー","settings.youtubeapikey.desc":"YouTubeチャンネルをポッドキャストに変換するためのAPIキー","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"ビデオコーデック","settings.ffmpeg.codec.desc":"トランスコードストリームのデフォルトビデオコーデック","settings.ffmpeg.format":"ビデオフォーマット","settings.ffmpeg.format.desc":"デフォルトのビデオコンテナフォーマット","settings.ffmpeg.serviceprovider":"サービスプロバイダー","settings.ffmpeg.serviceprovider.desc":"トランスコードストリームのメタデータのサービスプロバイダー名","settings.section.streamserver":"ストリームサーバー","settings.ss.startoninvoke":"アクセス時に起動","settings.ss.startoninvoke.desc":"アクセス時に停止中のストリームサーバーを自動起動","settings.ss.hidestopped":"プレイリストで停止中を非表示","settings.ss.hidestopped.desc":"M3UプレイリストでストリームサーバーM3Uを非表示","settings.ss.stoponnoconn":"接続なし時に停止","settings.ss.stoponnoconn.desc":"クライアントが接続されていない場合にサーバーを停止"}
+    pt:{"settings.section.general":"Geral","settings.logconsole":"Log no Console","settings.logconsole.desc":"Exibe logs no console do servidor","settings.logweb":"Log Web","settings.logweb.desc":"Exibe logs em /log (browser)","settings.showerror":"Exibir Erros no Stream","settings.showerror.desc":"Mostra detalhes de erro na saída do stream","settings.streamlinkpath":"Caminho do Streamlink","settings.streamlinkpath.desc":"Caminho completo do executável streamlink (vazio = auto)","settings.ffmpegpath":"Caminho do FFmpeg","settings.ffmpegpath.desc":"Caminho completo do executável ffmpeg (vazio = auto)","settings.youtubeapikey":"Chave API YouTube","settings.youtubeapikey.desc":"Chave de API para conversão de canal YouTube em podcast","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Codec de Vídeo","settings.ffmpeg.codec.desc":"Codec de vídeo padrão para streams transcodificados","settings.ffmpeg.format":"Formato de Vídeo","settings.ffmpeg.format.desc":"Formato de contêiner de vídeo padrão","settings.ffmpeg.serviceprovider":"Provedor de Serviço","settings.ffmpeg.serviceprovider.desc":"Nome do provedor de serviço nos metadados","settings.section.streamserver":"Stream Server","settings.ss.startoninvoke":"Iniciar ao Acessar","settings.ss.startoninvoke.desc":"Inicia automaticamente um servidor parado quando acessado","settings.ss.hidestopped":"Ocultar Parados na Playlist","settings.ss.hidestopped.desc":"Oculta servidores parados no playlist M3U","settings.ss.stoponnoconn":"Parar sem Conexões","settings.ss.stoponnoconn.desc":"Para o servidor quando não há clientes conectados","settings.ss.showtestcardonfailstream":"Exibir testcard em falha de stream","settings.ss.showtestcardonfailstream.desc":"Exibe um testcard com erro enquanto o stream de origem estiver offline e inicia automaticamente quando voltar"},
+    en:{"settings.section.general":"General","settings.logconsole":"Console Log","settings.logconsole.desc":"Print logs to server console","settings.logweb":"Web Log","settings.logweb.desc":"Display logs at /log (browser)","settings.showerror":"Show Error in Stream","settings.showerror.desc":"Show error details in stream output","settings.streamlinkpath":"Streamlink Path","settings.streamlinkpath.desc":"Full path to streamlink executable (empty = auto-detect)","settings.ffmpegpath":"FFmpeg Path","settings.ffmpegpath.desc":"Full path to ffmpeg executable (empty = auto-detect)","settings.youtubeapikey":"YouTube API Key","settings.youtubeapikey.desc":"API key for YouTube-to-podcast feature","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Video Codec","settings.ffmpeg.codec.desc":"Default video codec for transcoded streams","settings.ffmpeg.format":"Video Format","settings.ffmpeg.format.desc":"Default video container format","settings.ffmpeg.serviceprovider":"Service Provider","settings.ffmpeg.serviceprovider.desc":"Metadata service provider name in transcoded streams","settings.section.streamserver":"Stream Server","settings.ss.startoninvoke":"Start on Invoke","settings.ss.startoninvoke.desc":"Auto-start a stopped stream server when accessed","settings.ss.hidestopped":"Hide Stopped in Playlist","settings.ss.hidestopped.desc":"Hide stopped stream servers in M3U playlist","settings.ss.stoponnoconn":"Stop on No Connection","settings.ss.stoponnoconn.desc":"Stop stream server when no clients are connected","settings.ss.showtestcardonfailstream":"Show testcard on fail stream","settings.ss.showtestcardonfailstream.desc":"Show a testcard with error while source stream is offline and auto-start live stream when it comes back"},
+    es:{"settings.section.general":"General","settings.logconsole":"Log de Consola","settings.logconsole.desc":"Muestra logs en la consola del servidor","settings.logweb":"Log Web","settings.logweb.desc":"Muestra logs en /log (navegador)","settings.showerror":"Mostrar Error en Stream","settings.showerror.desc":"Muestra detalles de error en la salida del stream","settings.streamlinkpath":"Ruta de Streamlink","settings.streamlinkpath.desc":"Ruta completa al ejecutable streamlink (vacío = auto)","settings.ffmpegpath":"Ruta de FFmpeg","settings.ffmpegpath.desc":"Ruta completa al ejecutable ffmpeg (vacío = auto)","settings.youtubeapikey":"Clave API YouTube","settings.youtubeapikey.desc":"Clave de API para conversión de canal YouTube a podcast","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Codec de Vídeo","settings.ffmpeg.codec.desc":"Codec de vídeo predeterminado para streams transcodificados","settings.ffmpeg.format":"Formato de Vídeo","settings.ffmpeg.format.desc":"Formato de contenedor de vídeo predeterminado","settings.ffmpeg.serviceprovider":"Proveedor de Servicio","settings.ffmpeg.serviceprovider.desc":"Nombre del proveedor de servicio en metadatos","settings.section.streamserver":"Stream Server","settings.ss.startoninvoke":"Iniciar al Acceder","settings.ss.startoninvoke.desc":"Inicia automáticamente un servidor detenido al acceder","settings.ss.hidestopped":"Ocultar Detenidos en Playlist","settings.ss.hidestopped.desc":"Oculta servidores detenidos en el playlist M3U","settings.ss.stoponnoconn":"Detener sin Conexiones","settings.ss.stoponnoconn.desc":"Detiene el servidor cuando no hay clientes conectados","settings.ss.showtestcardonfailstream":"Mostrar testcard al fallar stream","settings.ss.showtestcardonfailstream.desc":"Muestra un testcard con error mientras la fuente esté offline e inicia el stream automáticamente cuando vuelva"},
+    de:{"settings.section.general":"Allgemein","settings.logconsole":"Konsolenprotokoll","settings.logconsole.desc":"Protokoll in der Serverkonsole ausgeben","settings.logweb":"Web-Protokoll","settings.logweb.desc":"Protokoll unter /log anzeigen (Browser)","settings.showerror":"Fehler im Stream anzeigen","settings.showerror.desc":"Fehlerdetails in der Stream-Ausgabe anzeigen","settings.streamlinkpath":"Streamlink-Pfad","settings.streamlinkpath.desc":"Vollständiger Pfad zur streamlink-Ausführungsdatei (leer = automatisch)","settings.ffmpegpath":"FFmpeg-Pfad","settings.ffmpegpath.desc":"Vollständiger Pfad zur ffmpeg-Ausführungsdatei (leer = automatisch)","settings.youtubeapikey":"YouTube API-Schlüssel","settings.youtubeapikey.desc":"API-Schlüssel für YouTube-Kanal-zu-Podcast-Funktion","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Video-Codec","settings.ffmpeg.codec.desc":"Standard-Video-Codec für transkodierte Streams","settings.ffmpeg.format":"Videoformat","settings.ffmpeg.format.desc":"Standard-Videocontainerformat","settings.ffmpeg.serviceprovider":"Dienstanbieter","settings.ffmpeg.serviceprovider.desc":"Name des Dienstanbieters in Metadaten","settings.section.streamserver":"Stream-Server","settings.ss.startoninvoke":"Beim Zugriff starten","settings.ss.startoninvoke.desc":"Gestoppten Stream-Server beim Zugriff automatisch starten","settings.ss.hidestopped":"Gestoppte in Playlist ausblenden","settings.ss.hidestopped.desc":"Gestoppte Stream-Server in der M3U-Playlist ausblenden","settings.ss.stoponnoconn":"Bei keiner Verbindung stoppen","settings.ss.stoponnoconn.desc":"Stream-Server stoppen, wenn keine Clients verbunden sind","settings.ss.showtestcardonfailstream":"Testcard bei Stream-Fehler anzeigen","settings.ss.showtestcardonfailstream.desc":"Zeigt eine Testcard mit Fehler, solange der Quellstream offline ist, und startet den Livestream automatisch, sobald er zurückkommt"},
+    it:{"settings.section.general":"Generale","settings.logconsole":"Log Console","settings.logconsole.desc":"Stampa i log nella console del server","settings.logweb":"Log Web","settings.logweb.desc":"Mostra i log su /log (browser)","settings.showerror":"Mostra Errore nello Stream","settings.showerror.desc":"Mostra i dettagli degli errori nell'output dello stream","settings.streamlinkpath":"Percorso Streamlink","settings.streamlinkpath.desc":"Percorso completo all'eseguibile streamlink (vuoto = auto)","settings.ffmpegpath":"Percorso FFmpeg","settings.ffmpegpath.desc":"Percorso completo all'eseguibile ffmpeg (vuoto = auto)","settings.youtubeapikey":"Chiave API YouTube","settings.youtubeapikey.desc":"Chiave API per la conversione canale YouTube in podcast","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Codec Video","settings.ffmpeg.codec.desc":"Codec video predefinito per stream transcodificati","settings.ffmpeg.format":"Formato Video","settings.ffmpeg.format.desc":"Formato contenitore video predefinito","settings.ffmpeg.serviceprovider":"Provider di Servizio","settings.ffmpeg.serviceprovider.desc":"Nome del provider di servizio nei metadati","settings.section.streamserver":"Stream Server","settings.ss.startoninvoke":"Avvia all'Accesso","settings.ss.startoninvoke.desc":"Avvia automaticamente un server fermo quando acceduto","settings.ss.hidestopped":"Nascondi Fermi nella Playlist","settings.ss.hidestopped.desc":"Nasconde i server fermi nella playlist M3U","settings.ss.stoponnoconn":"Ferma senza Connessioni","settings.ss.stoponnoconn.desc":"Ferma il server quando non ci sono client connessi","settings.ss.showtestcardonfailstream":"Mostra testcard in caso di errore stream","settings.ss.showtestcardonfailstream.desc":"Mostra una testcard con errore mentre la sorgente è offline e avvia automaticamente il live stream quando torna online"},
+    ru:{"settings.section.general":"Общие","settings.logconsole":"Лог консоли","settings.logconsole.desc":"Выводить логи в консоль сервера","settings.logweb":"Веб-лог","settings.logweb.desc":"Отображать логи по адресу /log (браузер)","settings.showerror":"Показывать ошибки в потоке","settings.showerror.desc":"Показывать детали ошибок в выводе потока","settings.streamlinkpath":"Путь к Streamlink","settings.streamlinkpath.desc":"Полный путь к исполняемому файлу streamlink (пусто = авто)","settings.ffmpegpath":"Путь к FFmpeg","settings.ffmpegpath.desc":"Полный путь к исполняемому файлу ffmpeg (пусто = авто)","settings.youtubeapikey":"Ключ API YouTube","settings.youtubeapikey.desc":"Ключ API для функции преобразования YouTube-канала в подкаст","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"Видеокодек","settings.ffmpeg.codec.desc":"Видеокодек по умолчанию для транскодированных потоков","settings.ffmpeg.format":"Видеоформат","settings.ffmpeg.format.desc":"Формат видеоконтейнера по умолчанию","settings.ffmpeg.serviceprovider":"Поставщик услуг","settings.ffmpeg.serviceprovider.desc":"Имя поставщика услуг в метаданных","settings.section.streamserver":"Стрим-сервер","settings.ss.startoninvoke":"Запускать при доступе","settings.ss.startoninvoke.desc":"Автоматически запускать остановленный сервер при обращении","settings.ss.hidestopped":"Скрыть остановленные в плейлисте","settings.ss.hidestopped.desc":"Скрывать остановленные серверы в плейлисте M3U","settings.ss.stoponnoconn":"Остановить без подключений","settings.ss.stoponnoconn.desc":"Останавливать сервер при отсутствии клиентов","settings.ss.showtestcardonfailstream":"Показывать testcard при ошибке потока","settings.ss.showtestcardonfailstream.desc":"Показывать testcard с ошибкой, пока исходный поток офлайн, и автоматически запускать live-поток при восстановлении"},
+    zh:{"settings.section.general":"常规","settings.logconsole":"控制台日志","settings.logconsole.desc":"将日志打印到服务器控制台","settings.logweb":"Web日志","settings.logweb.desc":"在 /log 显示日志（浏览器）","settings.showerror":"在流中显示错误","settings.showerror.desc":"在流输出中显示错误详情","settings.streamlinkpath":"Streamlink路径","settings.streamlinkpath.desc":"Streamlink可执行文件的完整路径（空=自动检测）","settings.ffmpegpath":"FFmpeg路径","settings.ffmpegpath.desc":"FFmpeg可执行文件的完整路径（空=自动检测）","settings.youtubeapikey":"YouTube API密钥","settings.youtubeapikey.desc":"YouTube频道转播客功能的API密钥","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"视频编解码器","settings.ffmpeg.codec.desc":"转码流的默认视频编解码器","settings.ffmpeg.format":"视频格式","settings.ffmpeg.format.desc":"默认视频容器格式","settings.ffmpeg.serviceprovider":"服务提供商","settings.ffmpeg.serviceprovider.desc":"转码流元数据中的服务提供商名称","settings.section.streamserver":"流服务器","settings.ss.startoninvoke":"访问时启动","settings.ss.startoninvoke.desc":"访问时自动启动已停止的流服务器","settings.ss.hidestopped":"在播放列表中隐藏已停止","settings.ss.hidestopped.desc":"在M3U播放列表中隐藏已停止的流服务器","settings.ss.stoponnoconn":"无连接时停止","settings.ss.stoponnoconn.desc":"没有客户端连接时停止流服务器","settings.ss.showtestcardonfailstream":"流失败时显示测试卡","settings.ss.showtestcardonfailstream.desc":"当源流离线时显示带错误信息的测试卡，并在恢复后自动切换到直播流"},
+    ja:{"settings.section.general":"全般","settings.logconsole":"コンソールログ","settings.logconsole.desc":"サーバーコンソールにログを出力","settings.logweb":"Webログ","settings.logweb.desc":"/log でログを表示（ブラウザ）","settings.showerror":"ストリームにエラーを表示","settings.showerror.desc":"ストリーム出力にエラーの詳細を表示","settings.streamlinkpath":"Streamlinkパス","settings.streamlinkpath.desc":"streamlink実行ファイルのフルパス（空=自動検出）","settings.ffmpegpath":"FFmpegパス","settings.ffmpegpath.desc":"ffmpeg実行ファイルのフルパス（空=自動検出）","settings.youtubeapikey":"YouTube APIキー","settings.youtubeapikey.desc":"YouTubeチャンネルをポッドキャストに変換するためのAPIキー","settings.section.ffmpeg":"FFmpeg","settings.ffmpeg.codec":"ビデオコーデック","settings.ffmpeg.codec.desc":"トランスコードストリームのデフォルトビデオコーデック","settings.ffmpeg.format":"ビデオフォーマット","settings.ffmpeg.format.desc":"デフォルトのビデオコンテナフォーマット","settings.ffmpeg.serviceprovider":"サービスプロバイダー","settings.ffmpeg.serviceprovider.desc":"トランスコードストリームのメタデータのサービスプロバイダー名","settings.section.streamserver":"ストリームサーバー","settings.ss.startoninvoke":"アクセス時に起動","settings.ss.startoninvoke.desc":"アクセス時に停止中のストリームサーバーを自動起動","settings.ss.hidestopped":"プレイリストで停止中を非表示","settings.ss.hidestopped.desc":"M3Uプレイリストで停止中のストリームサーバーを非表示","settings.ss.stoponnoconn":"接続なし時に停止","settings.ss.stoponnoconn.desc":"クライアントが接続されていない場合にサーバーを停止","settings.ss.showtestcardonfailstream":"ストリーム失敗時にテストカードを表示","settings.ss.showtestcardonfailstream.desc":"ソースストリームがオフラインの間はエラー付きテストカードを表示し、復帰時にライブ配信へ自動切替"}
   };
   Object.keys(SP_EXTRA3).forEach(function(l){ if(SP_TRANS[l]) Object.assign(SP_TRANS[l], SP_EXTRA3[l]); });
     var SP_EXTRA4 = {
